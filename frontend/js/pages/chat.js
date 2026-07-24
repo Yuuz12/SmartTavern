@@ -1566,7 +1566,9 @@ async function continueLastMessage(conv, lastAssistantMsg) {
   thinkingContainer.id = 'streaming-thinking-container';
   contentEl.insertBefore(thinkingContainer, streamingBubble);
   scrollToBottom();
-  let fullContent = lastAssistantMsg.content || '';
+  const suffixMap = { none: '', space: ' ', newline: '\n', double_newline: '\n\n' };
+  const suffix = suffixMap[userSettingsModule.getSettings().continueSuffix || 'newline'] ?? '\n';
+  let fullContent = (lastAssistantMsg.content || '') + suffix;
   let fullThinking = '';
   let typingIndicatorRemoved = false;
   let doneReceived = false;
@@ -1656,7 +1658,7 @@ async function continueLastMessage(conv, lastAssistantMsg) {
         safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">续写失败: ${escapeHtml(err.message)}</em>`);
         showError(err.message || '续写失败');
       },
-    }, currentAbortController.signal, getRegexExtraBody());
+    }, currentAbortController.signal, { ...getRegexExtraBody(), continueSuffix: userSettingsModule.getSettings().continueSuffix || 'newline' });
     // 流结束后确保思考状态终结
     safeFinishThinking();
   } catch (err) {

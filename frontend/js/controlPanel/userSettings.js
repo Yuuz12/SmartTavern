@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   showMessageTokenCount: false,
   smoothStreaming: true,
   streamBlur: true,
+  continueSuffix: 'newline',
   autoScrollToBottom: true,
   sendOnEnter: true,
   confirmMessageDelete: true,
@@ -77,11 +78,11 @@ export function renderUserSettings(container, opts = {}) {
       <div class="cp-grid">
         <div class="cp-field">
           <label class="cp-field__label">主题</label>
-          <mdui-segmented-button-group id="theme-options" selects="single" value="${settings.theme || 'system'}">
-            <mdui-segmented-button value="light">浅色</mdui-segmented-button>
-            <mdui-segmented-button value="dark">深色</mdui-segmented-button>
-            <mdui-segmented-button value="system">跟随系统</mdui-segmented-button>
-          </mdui-segmented-button-group>
+          <mdui-select id="theme-options" variant="outlined" value="${settings.theme || 'system'}">
+            <mdui-menu-item value="light">浅色</mdui-menu-item>
+            <mdui-menu-item value="dark">深色</mdui-menu-item>
+            <mdui-menu-item value="system">跟随系统</mdui-menu-item>
+          </mdui-select>
         </div>
 
         <div class="cp-field">
@@ -159,6 +160,18 @@ export function renderUserSettings(container, opts = {}) {
       </div>
       <div class="cp-switch-row">
         <div>
+          <div class="cp-switch-row__label">续写后缀</div>
+          <div class="cp-switch-row__desc">续写时在原文末尾添加的分隔符</div>
+        </div>
+        <mdui-select id="continue-suffix" variant="outlined" value="${settings.continueSuffix}">
+          <mdui-menu-item value="none">无</mdui-menu-item>
+          <mdui-menu-item value="space">空格</mdui-menu-item>
+          <mdui-menu-item value="newline">换行</mdui-menu-item>
+          <mdui-menu-item value="double_newline">双换行</mdui-menu-item>
+        </mdui-select>
+      </div>
+      <div class="cp-switch-row">
+        <div>
           <div class="cp-switch-row__label">自动滚动到底部</div>
           <div class="cp-switch-row__desc">AI 生成时自动滚动到最新消息</div>
         </div>
@@ -185,12 +198,15 @@ export function renderUserSettings(container, opts = {}) {
         </div>
         <mdui-switch id="expand-thinking" ${settings.expandThinkingAfterComplete ? 'checked' : ''}></mdui-switch>
       </div>
-      <div class="cp-field" style="margin-top: 16px;">
-        <label class="cp-field__label">信息显示方式</label>
-        <mdui-segmented-button-group id="display-mode-options" selects="single" value="${settings.displayMode || 'bubble'}">
-          <mdui-segmented-button value="bubble">气泡显示</mdui-segmented-button>
-          <mdui-segmented-button value="flat">平铺显示</mdui-segmented-button>
-        </mdui-segmented-button-group>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">信息显示方式</div>
+          <div class="cp-switch-row__desc">气泡显示或平铺显示</div>
+        </div>
+        <mdui-select id="display-mode-options" variant="outlined" value="${settings.displayMode || 'bubble'}">
+          <mdui-menu-item value="bubble">气泡</mdui-menu-item>
+          <mdui-menu-item value="flat">平铺</mdui-menu-item>
+        </mdui-select>
       </div>
     </div>
 
@@ -206,14 +222,16 @@ export function renderUserSettings(container, opts = {}) {
         </div>
         <mdui-switch id="render-enabled" ${settings.renderEnabled ? 'checked' : ''}></mdui-switch>
       </div>
-      <div class="cp-field" style="margin-top: 12px;">
-        <label class="cp-field__label">代码折叠</label>
-        <div class="cp-field__desc" style="margin-bottom: 8px; font-size: 12px; color: rgb(var(--mdui-color-on-surface-variant));">折叠指定类型的代码块，“仅前端”只折叠可渲染但未被渲染的代码块</div>
-        <mdui-segmented-button-group id="collapse-code-block" selects="single" value="${settings.collapseCodeBlock || 'frontend_only'}">
-          <mdui-segmented-button value="all">全部</mdui-segmented-button>
-          <mdui-segmented-button value="frontend_only">仅前端</mdui-segmented-button>
-          <mdui-segmented-button value="none">禁用</mdui-segmented-button>
-        </mdui-segmented-button-group>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">代码折叠</div>
+          <div class="cp-switch-row__desc">折叠指定类型的代码块，“仅前端”只折叠可渲染但未被渲染的代码块</div>
+        </div>
+        <mdui-select id="collapse-code-block" variant="outlined" value="${settings.collapseCodeBlock || 'frontend_only'}">
+          <mdui-menu-item value="all">全部</mdui-menu-item>
+          <mdui-menu-item value="frontend_only">仅前端</mdui-menu-item>
+          <mdui-menu-item value="none">禁用</mdui-menu-item>
+        </mdui-select>
       </div>
     </div>
 
@@ -343,6 +361,11 @@ function bindEvents(container) {
   // 显示方式切换
   container.querySelector('#display-mode-options')?.addEventListener('change', (e) => {
     updateSettings({ displayMode: e.target.value });
+  });
+
+  // 续写后缀
+  container.querySelector('#continue-suffix')?.addEventListener('change', (e) => {
+    updateSettings({ continueSuffix: e.target.value });
   });
 
   // 自定义 CSS

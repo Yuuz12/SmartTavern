@@ -145,7 +145,7 @@ function renderContent(container) {
           <mdui-menu-item value="">跟随对话 LLM</mdui-menu-item>
           ${(appState.get('llmConfigs') || []).map((c) => `<mdui-menu-item value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.id)}</mdui-menu-item>`).join('')}
         </mdui-select>
-        <div class="cp-field__desc" style="margin-top:4px;">选择用于生成总结的 LLM，留空则使用对话当前的 LLM 配置</div>
+        <div class="cp-field__desc" style="margin-top:4px;">选择用于生成总结的 LLM</div>
       </div>
       <div class="cp-field">
         <div class="cp-field__label">

@@ -441,19 +441,12 @@ async function streamLLMResponse(
       }
     }
 
-    // 续写模式：移除最后一条 assistant 消息，添加续写指令
+    // 续写模式：保留完整对话历史（含最后一条 assistant），追加续写指令让 LLM 自然接续
     if (continueFromMessageId) {
       const originalMsg = conv.messages.find(m => m.id === continueFromMessageId);
       originalContent = originalMsg?.content || '';
-      
-      // 移除最后一条 assistant 消息（LLM 不接受连续两条 assistant）
-      while (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
-        messages.pop();
-      }
-      
-      // 在系统提示词中添加续写指令和原有内容
-      finalSystemPrompt = finalSystemPrompt + 
-        `\n\n[续写指令：请紧接以下内容继续写，不要重复已有内容，直接从末尾接续：]\n"""\n${originalContent}\n"""`;
+      // 保留 assistant 消息在历史中，追加一条 user 指令
+      messages.push({ role: 'user', content: '[System note: Continue the previous assistant response. Pick up exactly where it left off. Do NOT repeat or rephrase any existing text. Write only the continuation.]' });
     }
 
     // 注入 in-chat 提示词（按 injection_depth 决定位置，0 = 最新消息之前）
@@ -498,7 +491,7 @@ async function streamLLMResponse(
   // 发送消息 ID 给客户端
   writeSSE({ type: 'message_id', messageId: aiMessage.id });
 
-  let fullContent = originalContent;
+  let fullContent = '';  // 续写模式：仅累积新生成的内容，最终保存时拼接原文
   let fullThinking = '';
   const startTime = Date.now();
 
@@ -545,17 +538,22 @@ async function streamLLMResponse(
       }
     }
 
+    // 续写模式：拼接原文 + 后缀 + 新生成内容
+    const suffixMap: Record<string, string> = { none: '', space: ' ', newline: '\n', double_newline: '\n\n' };
+    const continueSuffix = continueFromMessageId ? (suffixMap[(req.body?.continueSuffix as string) || 'newline'] ?? '\n') : '';
+    const finalContent = originalContent + continueSuffix + fullContent;
+
     // token 计数：优先用 API 返回的真实值，否则用 gpt-tokenizer 估算
-    const outputTokens = usageTokens > 0 ? usageTokens : (await import('gpt-tokenizer')).encode(fullContent).length;
+    const outputTokens = usageTokens > 0 ? usageTokens : (await import('gpt-tokenizer')).encode(finalContent).length;
     if (swipeMessageId) {
       // swipe 模式：将新内容追加到 swipes 数组，思维链追加到 swipeThinkings
       const swipeMsg = conv.messages.find((m) => m.id === swipeMessageId);
       const oldSwipes = swipeMsg?.swipes || [swipeMsg?.content || ''];
-      const newSwipes = [...oldSwipes, fullContent];
+      const newSwipes = [...oldSwipes, finalContent];
       const oldThinkings: string[] = swipeMsg?.swipeThinkings || [(swipeMsg?.metadata?.thinking as string) || ''];
       const newThinkings = [...oldThinkings, fullThinking || ''];
       await conversationService.updateMessage(req.params.id, conv.userId, aiMessage.id, {
-        content: fullContent,
+        content: finalContent,
         swipes: newSwipes,
         swipeThinkings: newThinkings,
         swipeIndex: newSwipes.length - 1,
@@ -568,7 +566,7 @@ async function streamLLMResponse(
       });
     } else {
       await conversationService.updateMessage(req.params.id, conv.userId, aiMessage.id, {
-        content: fullContent,
+        content: finalContent,
         metadata: {
           duration: Date.now() - startTime,
           tokens: outputTokens,
@@ -581,7 +579,7 @@ async function streamLLMResponse(
     // 发送完成事件
     writeSSE({
       type: 'done',
-      content: fullContent,
+      content: finalContent,
       ...(fullThinking ? { thinking: fullThinking } : {}),
       duration: Date.now() - startTime,
       tokens: outputTokens,

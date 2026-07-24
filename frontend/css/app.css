@@ -455,6 +455,10 @@ button {
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
   margin-top: 2px;
 }
+.cp-switch-row mdui-select {
+  width: auto;
+  flex-shrink: 0;
+}
 .cp-preset-bar {
   display: flex;
   gap: 8px;
