@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 - SmartTavern</title>
+  <link rel="stylesheet" href="/lib/mdui/mdui.css" />
+  <link rel="stylesheet" href="/lib/material-icons/material-icons.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-card__brand">
+        <div class="auth-card__logo">
+          <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+            <path fill="currentColor" d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+          </svg>
+        </div>
+        <h1 class="auth-card__title">SmartTavern</h1>
+        <p class="auth-card__subtitle">智能角色扮演对话平台</p>
+      </div>
+
+      <mdui-tabs value="login" class="auth-tabs" style="margin-bottom: 20px;">
+        <mdui-tab value="login">登录</mdui-tab>
+        <mdui-tab value="register">注册</mdui-tab>
+
+        <mdui-tab-panel slot="panel" value="login">
+          <form id="login-form" novalidate style="display: flex; flex-direction: column; gap: 16px; padding-top: 8px;">
+            <mdui-text-field
+              id="login-username"
+              label="用户名"
+              variant="outlined"
+              autocomplete="username"
+              required
+            ></mdui-text-field>
+            <div class="form-group__error" data-error="username"></div>
+
+            <mdui-text-field
+              id="login-password"
+              label="密码"
+              variant="outlined"
+              type="password"
+              autocomplete="current-password"
+              required
+            ></mdui-text-field>
+            <div class="form-group__error" data-error="password"></div>
+
+            <mdui-button type="submit" variant="filled" full-width id="login-submit">登录</mdui-button>
+          </form>
+        </mdui-tab-panel>
+
+        <mdui-tab-panel slot="panel" value="register">
+          <form id="register-form" novalidate style="display: flex; flex-direction: column; gap: 16px; padding-top: 8px;">
+            <mdui-text-field
+              id="register-username"
+              label="用户名"
+              variant="outlined"
+              autocomplete="username"
+              required
+              minlength="3"
+              maxlength="32"
+            ></mdui-text-field>
+            <div class="form-group__error" data-error="username"></div>
+
+            <mdui-text-field
+              id="register-password"
+              label="密码"
+              variant="outlined"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              helper="至少 8 位，包含大小写字母和数字"
+            ></mdui-text-field>
+            <div class="form-group__error" data-error="password"></div>
+
+            <mdui-text-field
+              id="register-confirm"
+              label="确认密码"
+              variant="outlined"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+            ></mdui-text-field>
+            <div class="form-group__error" data-error="confirmPassword"></div>
+
+            <div class="auth-form__hint" id="register-hint" style="font-size: 12px; color: var(--md-sys-color-on-surface-variant); min-height: 16px;"></div>
+
+            <mdui-button type="submit" variant="filled" full-width id="register-submit">注册</mdui-button>
+          </form>
+        </mdui-tab-panel>
+      </mdui-tabs>
+
+      <div class="auth-card__footer">
+        <mdui-button-icon id="theme-toggle" icon="dark_mode" label="切换主题"></mdui-button-icon>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/pages/login.js"></script>
+</body>
+</html>

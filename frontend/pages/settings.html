@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>设置 - SmartTavern</title>
+  <link rel="stylesheet" href="/lib/mdui/mdui.css" />
+  <link rel="stylesheet" href="/lib/material-icons/material-icons.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <mdui-layout full-height>
+    <!-- 顶部应用栏 -->
+    <mdui-top-app-bar variant="small" order="1">
+      <mdui-button-icon icon="arrow_back" id="back-btn" label="返回对话"></mdui-button-icon>
+      <mdui-top-app-bar-title>设置</mdui-top-app-bar-title>
+      <div style="flex-grow: 1"></div>
+      <mdui-button-icon icon="dark_mode" id="theme-toggle" label="切换主题"></mdui-button-icon>
+    </mdui-top-app-bar>
+
+    <!-- 主内容 -->
+    <mdui-layout-main order="2" class="mgmt-content">
+      <div class="settings-sections">
+        <!-- 个人信息 -->
+        <section class="settings-section" id="profile-section">
+          <h2 class="settings-section__title">个人信息</h2>
+          <div class="settings-row">
+            <div class="md-avatar md-avatar--lg" id="profile-avatar"></div>
+            <div class="settings-row__info">
+              <div class="settings-row__label" id="profile-username">未登录</div>
+              <div class="settings-row__desc" id="profile-role">访客</div>
+            </div>
+            <mdui-button variant="outlined" id="edit-profile-btn">编辑</mdui-button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <div class="settings-row__label">修改密码</div>
+              <div class="settings-row__desc">定期更换密码以提高账户安全性</div>
+            </div>
+            <mdui-button variant="outlined" id="change-password-btn">修改密码</mdui-button>
+          </div>
+        </section>
+
+        <!-- 主题设置 -->
+        <section class="settings-section">
+          <h2 class="settings-section__title">外观</h2>
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <div class="settings-row__label">主题模式</div>
+              <div class="settings-row__desc">选择浅色、暗色或跟随系统</div>
+            </div>
+            <mdui-segmented-button-group id="theme-options" selects="single">
+              <mdui-segmented-button value="system">跟随系统</mdui-segmented-button>
+              <mdui-segmented-button value="light">浅色</mdui-segmented-button>
+              <mdui-segmented-button value="dark">暗色</mdui-segmented-button>
+            </mdui-segmented-button-group>
+          </div>
+        </section>
+
+        <!-- LLM 配置 -->
+        <section class="settings-section">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgb(var(--mdui-color-outline-variant));">
+            <h2 class="settings-section__title" style="margin: 0; border: none; padding: 0;">LLM 配置</h2>
+            <mdui-button variant="filled" id="add-llm-btn" icon="add">添加</mdui-button>
+          </div>
+          <div id="llm-configs-list">
+            <div class="mgmt-loading"><mdui-circular-progress></mdui-circular-progress></div>
+          </div>
+        </section>
+
+        <!-- 用户管理（仅管理员） -->
+        <section class="settings-section hidden" id="users-section">
+          <h2 class="settings-section__title">用户管理 <span class="md-tag" style="margin-left: 8px;">管理员</span></h2>
+
+          <div class="settings-row" style="margin-bottom: 16px;">
+            <div class="settings-row__info">
+              <div class="settings-row__label">允许注册</div>
+              <div class="settings-row__desc">关闭后新用户将无法注册账号</div>
+            </div>
+            <mdui-switch id="registration-toggle"></mdui-switch>
+          </div>
+
+          <div class="mgmt-toolbar" style="margin-bottom: 16px;">
+            <mdui-text-field
+              id="user-search"
+              variant="outlined"
+              placeholder="搜索用户..."
+              icon="search"
+              clearable
+              class="mgmt-toolbar__search"
+            ></mdui-text-field>
+            <mdui-button variant="outlined" id="refresh-users-btn" icon="refresh">刷新</mdui-button>
+            <mdui-button variant="filled" id="create-user-btn" icon="person_add">创建用户</mdui-button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th>用户名</th>
+                  <th>角色</th>
+                  <th>注册时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <tr><td colspan="4" style="text-align: center; color: rgb(var(--mdui-color-on-surface-variant));">点击刷新加载用户列表</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 关于 -->
+        <section class="settings-section">
+          <h2 class="settings-section__title">关于</h2>
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <div class="settings-row__label">SmartTavern</div>
+              <div class="settings-row__desc">基于 LLM 的智能体角色扮演平台</div>
+            </div>
+            <span class="md-tag">v1.0.0</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <div class="settings-row__label">退出登录</div>
+              <div class="settings-row__desc">退出当前账户</div>
+            </div>
+            <mdui-button variant="outlined" id="logout-btn" style="color: rgb(var(--mdui-color-error)); border-color: rgb(var(--mdui-color-error));">退出</mdui-button>
+          </div>
+        </section>
+      </div>
+    </mdui-layout-main>
+  </mdui-layout>
+
+  <script type="module" src="/js/pages/settings.js"></script>
+</body>
+</html>

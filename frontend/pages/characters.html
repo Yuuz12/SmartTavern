@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>角色卡 - SmartTavern</title>
+  <link rel="stylesheet" href="/lib/mdui/mdui.css" />
+  <link rel="stylesheet" href="/lib/material-icons/material-icons.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <mdui-layout full-height>
+    <!-- 顶部应用栏 -->
+    <mdui-top-app-bar variant="small" order="1">
+      <mdui-button-icon icon="arrow_back" id="back-btn" label="返回对话"></mdui-button-icon>
+      <mdui-top-app-bar-title>角色卡管理</mdui-top-app-bar-title>
+      <div style="flex-grow: 1"></div>
+      <mdui-button-icon icon="dark_mode" id="theme-toggle" label="切换主题"></mdui-button-icon>
+    </mdui-top-app-bar>
+
+    <!-- 主内容 -->
+    <mdui-layout-main order="2" class="mgmt-content">
+      <div class="mgmt-toolbar">
+        <mdui-text-field
+          id="search-input"
+          variant="outlined"
+          placeholder="搜索角色卡..."
+          icon="search"
+          clearable
+          class="mgmt-toolbar__search"
+        ></mdui-text-field>
+        <div class="mgmt-toolbar__actions">
+          <mdui-button variant="outlined" id="import-btn" icon="upload">导入</mdui-button>
+          <mdui-button variant="filled" id="create-btn" icon="add">新建</mdui-button>
+        </div>
+      </div>
+
+      <div class="mgmt-grid" id="character-grid">
+        <div class="mgmt-loading">
+          <mdui-circular-progress></mdui-circular-progress>
+        </div>
+      </div>
+    </mdui-layout-main>
+  </mdui-layout>
+
+  <input type="file" id="import-file" accept=".json" hidden />
+
+  <script type="module" src="/js/pages/characters.js"></script>
+</body>
+</html>

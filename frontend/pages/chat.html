@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartTavern - 对话</title>
+  <link rel="stylesheet" href="/lib/mdui/mdui.css" />
+  <link rel="stylesheet" href="/lib/material-icons/material-icons.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <mdui-layout full-height class="chat-layout">
+
+    <!-- ============ 左侧栏：回应配置 ============ -->
+    <mdui-navigation-drawer
+      id="sidebar"
+      contained
+      close-on-esc
+      close-on-overlay-click
+      placement="left"
+      order="1"
+    >
+      <div class="sidebar-content">
+        <div class="sidebar-header">
+          <span class="sidebar-header__title">回应配置</span>
+        </div>
+
+        <div class="sidebar-content__list" id="sidebar-response-config">
+          <!-- 回应配置动态渲染 -->
+        </div>
+
+        <div class="sidebar-content__footer">
+          <mdui-list>
+            <mdui-list-item
+              id="user-info"
+              icon="account_circle"
+              rounded
+            >
+              <span id="user-name">未登录</span>
+              <span slot="description" id="user-role">访客</span>
+              <mdui-button-icon slot="end-icon" icon="more_vert" id="user-menu-btn" label="菜单"></mdui-button-icon>
+            </mdui-list-item>
+          </mdui-list>
+        </div>
+      </div>
+    </mdui-navigation-drawer>
+
+    <!-- ============ 顶部应用栏 ============ -->
+    <mdui-top-app-bar variant="small" scroll-target="#chat-messages" order="2">
+      <mdui-button-icon icon="menu" id="toggle-sidebar" label="切换侧边栏"></mdui-button-icon>
+      <mdui-top-app-bar-title>
+        <div id="current-conv-title">选择或创建对话</div>
+        <div slot="description" id="current-conv-subtitle" style="font-size: 12px; color: rgb(var(--mdui-color-on-surface-variant));"></div>
+      </mdui-top-app-bar-title>
+      <div style="flex-grow: 1"></div>
+      <mdui-button-icon icon="view_sidebar" id="toggle-aside" label="切换详情面板"></mdui-button-icon>
+    </mdui-top-app-bar>
+
+    <!-- ============ 主区：聊天窗口 ============ -->
+    <mdui-layout-main order="3" style="padding: 0;">
+      <div class="chat-main">
+        <!-- ============ 顶部控制面板 ============ -->
+        <div class="control-panel" id="control-panel">
+          <div class="control-panel__tabs-bar">
+            <mdui-tabs id="control-panel-tabs" placement="top-start" class="control-panel__tabs">
+              <mdui-tab value="api-connection" icon="power">API 连接</mdui-tab>
+              <mdui-tab value="world-info" icon="menu_book">世界信息</mdui-tab>
+              <mdui-tab value="user-settings" icon="manage_accounts">用户设置</mdui-tab>
+              <mdui-tab value="extensions" icon="extension">扩展</mdui-tab>
+              <mdui-tab value="personas" icon="face">个性</mdui-tab>
+              <mdui-tab value="characters" icon="person">角色</mdui-tab>
+              <mdui-tab value="memory" icon="psychology">记忆</mdui-tab>
+              <mdui-tab value="regex" icon="find_replace">正则</mdui-tab>
+            </mdui-tabs>
+          </div>
+
+          <div class="control-panel__body" id="cp-body-api-connection">
+            <div class="control-panel__content" id="cp-content-api-connection"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-world-info">
+            <div class="control-panel__content" id="cp-content-world-info"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-user-settings">
+            <div class="control-panel__content" id="cp-content-user-settings"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-extensions">
+            <div class="control-panel__content" id="cp-content-extensions"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-personas">
+            <div class="control-panel__content" id="cp-content-personas"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-characters">
+            <div class="control-panel__content" id="cp-content-characters"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-memory">
+            <div class="control-panel__content" id="cp-content-memory"><!-- 动态渲染 --></div>
+          </div>
+          <div class="control-panel__body" id="cp-body-regex">
+            <div class="control-panel__content" id="cp-content-regex"><!-- 动态渲染 --></div>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+          <!-- 空状态 -->
+          <div class="chat-empty" id="chat-empty">
+            <div class="chat-empty__icon">
+              <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+                <path fill="currentColor" d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              </svg>
+            </div>
+            <h2 class="chat-empty__title">开始一段新的对话</h2>
+            <p class="chat-empty__description">选择角色卡与 LLM 配置，开启你的角色扮演之旅</p>
+            <mdui-button variant="filled" id="empty-new-conv">创建对话</mdui-button>
+          </div>
+        </div>
+
+        <div class="chat-input" id="chat-input-area" style="display: none;">
+          <mdui-button-icon icon="more_horiz" id="conv-settings-btn" label="更多操作"></mdui-button-icon>
+          <mdui-text-field
+            id="message-input"
+            class="chat-input__textarea"
+            variant="outlined"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+            autosize
+            min-rows="1"
+            max-rows="8"
+            style="flex: 1;"
+          ></mdui-text-field>
+          <mdui-button-icon icon="send" variant="filled" id="send-btn" label="发送" disabled></mdui-button-icon>
+          <mdui-button-icon icon="stop_circle" id="stop-btn" label="停止生成" class="hidden" style="color: rgb(var(--mdui-color-error));"></mdui-button-icon>
+        </div>
+        <div class="memory-status" id="memory-status" style="display: none;">
+          <mdui-circular-progress></mdui-circular-progress>
+          <span>正在总结记忆...</span>
+        </div>
+      </div>
+    </mdui-layout-main>
+
+    <!-- ============ 右侧栏：对话详情 ============ -->
+    <mdui-navigation-drawer
+      id="aside"
+      placement="right"
+      contained
+      close-on-esc
+      close-on-overlay-click
+      order="4"
+    >
+      <div class="aside-content">
+        <div class="sidebar-header">
+          <span class="sidebar-header__title">详情</span>
+          <div style="flex-grow: 1"></div>
+          <mdui-button-icon icon="close" id="close-aside" label="关闭"></mdui-button-icon>
+        </div>
+
+        <div class="aside-content__body" id="aside-content">
+          <!-- 详情内容动态渲染 -->
+          <div class="empty-state">
+            <p class="empty-state__description">未选中对话</p>
+          </div>
+        </div>
+      </div>
+    </mdui-navigation-drawer>
+
+  </mdui-layout>
+
+  <!-- 创建对话模态框容器 -->
+  <div id="modal-root"></div>
+
+  <script type="module" src="/js/pages/chat.js"></script>
+</body>
+</html>

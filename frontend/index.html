@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartTavern</title>
+  <link rel="stylesheet" href="/lib/mdui/mdui.css" />
+  <link rel="stylesheet" href="/lib/material-icons/material-icons.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="entry-loader">
+    <mdui-circular-progress></mdui-circular-progress>
+    <div class="entry-loader__brand">SmartTavern</div>
+  </div>
+  <script type="module">
+    import { initMduiTheme } from './js/utils/mduiTheme.js';
+    import { userState } from './js/stores/userState.js';
+
+    initMduiTheme();
+
+    (async () => {
+      try {
+        const user = await userState.init();
+        if (user) {
+          window.location.replace('/pages/chat.html');
+        } else {
+          window.location.replace('/pages/login.html');
+        }
+      } catch (err) {
+        window.location.replace('/pages/login.html');
+      }
+    })();
+  </script>
+</body>
+</html>

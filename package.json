@@ -1,0 +1,13 @@
+{
+  "name": "smarttavern",
+  "version": "1.0.0",
+  "description": "SmartTavern - 基于 LLM 的智能体角色扮演平台",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix backend run dev",
+    "build:backend": "npm --prefix backend run build",
+    "start:backend": "npm --prefix backend start",
+    "install:all": "npm install && npm --prefix backend install",
+    "release": "powershell -ExecutionPolicy Bypass -File ./publish.ps1"
+  }
+}
