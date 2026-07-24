@@ -6,14 +6,33 @@ import { setColorScheme, setTheme } from '../../lib/mdui/mdui.esm.js';
 import appState from '../stores/appState.js';
 import storage from './storage.js';
 
-// SmartTavern 品牌主色（保持与原 variables.css 一致的紫色）
-const BRAND_PRIMARY = '#6750A4';
+// SmartTavern 默认品牌主色
+const DEFAULT_PRIMARY = '#6750A4';
+
+// 当前主题色（内存缓存）
+let currentThemeColor = DEFAULT_PRIMARY;
+
+/**
+ * 应用主题色（调用 mdui setColorScheme 生成 MD3 调色板）
+ */
+export function applyThemeColor(color) {
+  if (!color) return;
+  currentThemeColor = color;
+  storage.set('themeColor', color);
+  try {
+    setColorScheme(color, { target: document.documentElement });
+  } catch (err) {
+    // 兆底
+  }
+}
 
 /**
  * 初始化 mdui 主题
  */
 export function initMduiTheme() {
   const savedTheme = storage.get('theme', 'system');
+  const savedColor = storage.get('themeColor', DEFAULT_PRIMARY);
+  currentThemeColor = savedColor;
   applyMduiTheme(savedTheme);
 
   // 监听系统主题变化
@@ -44,9 +63,9 @@ export function applyMduiTheme(theme) {
 
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  // 设置 mdui 颜色方案（仅需设置一次，自动生成 MD3 调色板）+ 切换暗色模式
+  // 设置 mdui 颜色方案（使用当前主题色）+ 切换暗色模式
   try {
-    setColorScheme(BRAND_PRIMARY, { target: document.documentElement });
+    setColorScheme(currentThemeColor, { target: document.documentElement });
     setTheme(isDark ? 'dark' : 'light', document.documentElement);
   } catch (err) {
     // 兜底：直接设置 mdui 的暗色模式属性
@@ -69,4 +88,4 @@ export function toggleMduiTheme() {
   applyMduiTheme(next);
 }
 
-export default { initMduiTheme, applyMduiTheme, toggleMduiTheme };
+export default { initMduiTheme, applyMduiTheme, toggleMduiTheme, applyThemeColor };

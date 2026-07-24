@@ -9,11 +9,24 @@ import storage from '../utils/storage.js';
 import { showSuccess, showError } from '../components/Toast.js';
 import { getIcon } from '../components/Icon.js';
 import { escapeHtml } from '../utils/helpers.js';
+import { applyThemeColor } from '../utils/mduiTheme.js';
 
 const STORAGE_KEY = 'cp_user_settings';
 
+const THEME_COLOR_PRESETS = [
+  { name: '紫', value: '#6750A4' },
+  { name: '蓝', value: '#1976D2' },
+  { name: '青', value: '#00897B' },
+  { name: '绿', value: '#388E3C' },
+  { name: '橙', value: '#F57C00' },
+  { name: '粉', value: '#C2185B' },
+  { name: '红', value: '#D32F2F' },
+  { name: '靖蓝', value: '#303F9F' },
+];
+
 const DEFAULT_SETTINGS = {
   theme: 'system',
+  themeColor: '#6750A4',
   chatWidth: 100,
   messageFontSize: 14,
   showTimestamps: true,
@@ -69,6 +82,17 @@ export function renderUserSettings(container, opts = {}) {
             <mdui-segmented-button value="dark">深色</mdui-segmented-button>
             <mdui-segmented-button value="system">跟随系统</mdui-segmented-button>
           </mdui-segmented-button-group>
+        </div>
+
+        <div class="cp-field">
+          <label class="cp-field__label">主题色</label>
+          <div class="theme-color-swatches" id="theme-color-swatches">
+            ${THEME_COLOR_PRESETS.map((c) => `<button class="theme-color-swatch ${settings.themeColor === c.value ? 'theme-color-swatch--active' : ''}" data-color="${c.value}" style="background:${c.value}" title="${c.name}"></button>`).join('')}
+            <label class="theme-color-swatch theme-color-swatch--custom" title="自定义">
+              <input type="color" id="theme-color-custom" value="${settings.themeColor}" />
+              +
+            </label>
+          </div>
         </div>
 
         <div class="cp-field">
@@ -250,6 +274,23 @@ function bindEvents(container) {
     updateSettings({ theme });
   });
 
+  // 主题色选择
+  const swatches = container.querySelector('#theme-color-swatches');
+  swatches?.querySelectorAll('.theme-color-swatch[data-color]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color;
+      swatches.querySelectorAll('.theme-color-swatch').forEach((s) => s.classList.remove('theme-color-swatch--active'));
+      btn.classList.add('theme-color-swatch--active');
+      updateSettings({ themeColor: color });
+    });
+  });
+  const customColorInput = container.querySelector('#theme-color-custom');
+  customColorInput?.addEventListener('input', () => {
+    const color = customColorInput.value;
+    swatches.querySelectorAll('.theme-color-swatch[data-color]').forEach((s) => s.classList.remove('theme-color-swatch--active'));
+    updateSettings({ themeColor: color });
+  });
+
   // 聊天宽度
   const chatWidthSlider = container.querySelector('#chat-width');
   const chatWidthHint = container.querySelector('[data-hint="chatWidth"]');
@@ -328,28 +369,20 @@ function bindEvents(container) {
 export function applySettings(settings) {
   const root = document.documentElement;
 
+  // 主题色
+  if (settings.themeColor) {
+    applyThemeColor(settings.themeColor);
+  }
+
   // 消息字体大小
   root.style.setProperty('--st-message-font-size', `${settings.messageFontSize}px`);
 
-  // 聊天宽度（修正选择器：原 .app-main 错误，应为 .chat-main）
+  // 聊天宽度
   const chatMessages = document.querySelector('.chat-main .chat-messages');
   if (chatMessages) {
     chatMessages.style.maxWidth = `${settings.chatWidth}%`;
     chatMessages.style.marginLeft = 'auto';
     chatMessages.style.marginRight = 'auto';
-    
-    // 当聊天宽度为100%时，移除消息的最大宽度限制
-    const messages = chatMessages.querySelectorAll('.message');
-    const messageMaxWidth = settings.chatWidth >= 100 ? 'none' : '80%';
-    messages.forEach(msg => {
-      msg.style.maxWidth = messageMaxWidth;
-    });
-    
-    // 系统消息保持90%宽度
-    const systemMessages = chatMessages.querySelectorAll('.message--system');
-    systemMessages.forEach(msg => {
-      msg.style.maxWidth = '90%';
-    });
   }
 
   // 时间戳/头像显示
