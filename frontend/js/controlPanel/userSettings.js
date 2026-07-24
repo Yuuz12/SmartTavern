@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   showMessageId: false,
   showMessageTokenCount: false,
   smoothStreaming: true,
+  streamBlur: true,
   autoScrollToBottom: true,
   sendOnEnter: true,
   confirmMessageDelete: true,
@@ -124,6 +125,13 @@ export function renderUserSettings(container, opts = {}) {
           <div class="cp-switch-row__desc">AI 生成时使用平滑动画显示文字</div>
         </div>
         <mdui-switch id="smooth-streaming" ${settings.smoothStreaming ? 'checked' : ''}></mdui-switch>
+      </div>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">流式模糊渐入</div>
+          <div class="cp-switch-row__desc">AI 生成时新文字以梯度模糊效果浮现</div>
+        </div>
+        <mdui-switch id="stream-blur" ${settings.streamBlur ? 'checked' : ''}></mdui-switch>
       </div>
       <div class="cp-switch-row">
         <div>
@@ -266,6 +274,7 @@ function bindEvents(container) {
     { id: 'show-avatars', key: 'showAvatars' },
     { id: 'show-floor-numbers', key: 'showFloorNumbers' },
     { id: 'smooth-streaming', key: 'smoothStreaming' },
+    { id: 'stream-blur', key: 'streamBlur' },
     { id: 'auto-scroll', key: 'autoScrollToBottom' },
     { id: 'collapse-newlines', key: 'collapseNewlines' },
     { id: 'trim-sentences', key: 'trimSentences' },

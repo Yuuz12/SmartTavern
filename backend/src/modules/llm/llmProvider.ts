@@ -4,10 +4,12 @@ import type { LLMConfig, Message } from '../../shared/index.js';
  * 流式输出的文本块类型
  * - text: 正文内容
  * - thinking: 思维链内容（reasoning）
+ * - usage: token 用量统计（流式结束时返回）
  */
 export type StreamChunk =
   | { type: 'text'; content: string }
-  | { type: 'thinking'; content: string };
+  | { type: 'thinking'; content: string }
+  | { type: 'usage'; promptTokens: number; completionTokens: number; totalTokens: number };
 
 /**
  * LLM 适配器统一接口

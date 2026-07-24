@@ -108,6 +108,15 @@ export class AnthropicProvider implements LLMProvider {
             if (json.type === 'content_block_delta' && json.delta?.text && !json.delta?.type) {
               yield { type: 'text', content: json.delta.text as string };
             }
+            // 捕获 usage 统计（message_delta 事件）
+            if (json.type === 'message_delta' && json.usage) {
+              yield {
+                type: 'usage',
+                promptTokens: 0,
+                completionTokens: json.usage.output_tokens || 0,
+                totalTokens: json.usage.output_tokens || 0,
+              };
+            }
           } catch {
             // 忽略解析错误
           }

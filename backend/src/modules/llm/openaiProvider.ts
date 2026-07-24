@@ -47,6 +47,7 @@ export class OpenAIProvider implements LLMProvider {
       frequency_penalty: params.frequencyPenalty,
       ...(params.stop ? { stop: params.stop } : {}),
       stream: true,
+      stream_options: { include_usage: true },
     };
 
     // 支持 OpenAI o-series 的 reasoning 参数
@@ -92,6 +93,18 @@ export class OpenAIProvider implements LLMProvider {
 
           try {
             const json = JSON.parse(data);
+
+            // 捕获 usage 统计（流式最后一个 chunk）
+            if (json.usage) {
+              yield {
+                type: 'usage',
+                promptTokens: json.usage.prompt_tokens || 0,
+                completionTokens: json.usage.completion_tokens || 0,
+                totalTokens: json.usage.total_tokens || 0,
+              };
+              continue;
+            }
+
             const delta = json.choices?.[0]?.delta;
             if (!delta) continue;
 

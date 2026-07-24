@@ -23,6 +23,40 @@ let isGenerating = false;
 let isMemoryGenerating = false;
 let convSearchKeyword = '';
 
+/** 流式输出逐字模糊：将容器内最后 N 个字符按梯度模糊（越靠后模糊度越高） */
+function blurTrailingText(container, charCount) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let lastNode = null;
+  while (walker.nextNode()) lastNode = walker.currentNode;
+  if (!lastNode || !lastNode.parentNode) return;
+  const text = lastNode.textContent;
+  if (!text) return;
+  const totalBlur = Math.min(charCount, text.length);
+  if (totalBlur <= 0) return;
+
+  // 拆分为 4 段梯度模糊
+  const segments = 4;
+  const segLen = Math.ceil(totalBlur / segments);
+  const blurText = text.slice(text.length - totalBlur);
+  lastNode.textContent = text.slice(0, text.length - totalBlur);
+
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < segments; i++) {
+    const start = i * segLen;
+    const end = Math.min(start + segLen, totalBlur);
+    if (start >= totalBlur) break;
+    const span = document.createElement('span');
+    span.className = 'st-char-blur';
+    // 梯度：第1段最清晰，第4段最模糊
+    const level = (i + 1) / segments; // 0.25, 0.5, 0.75, 1.0
+    span.style.filter = 'blur(' + (level * 4).toFixed(1) + 'px)';
+    span.style.opacity = String(1 - level * 0.55); // 0.86, 0.72, 0.59, 0.45
+    span.textContent = blurText.slice(start, end);
+    frag.appendChild(span);
+  }
+  lastNode.parentNode.insertBefore(frag, lastNode.nextSibling);
+}
+
 /** 获取有效正则脚本：用户自定义 + 当前激活预设自带的正则 */
 function getEffectiveRegexScripts() {
   const userScripts = appState.get('regexScripts') || [];
@@ -596,7 +630,18 @@ function renderMessageHtml(msg, user, character, floorNumber) {
     </div>
   `;
 
-  const floorHtml = floorNumber ? `<div class="message__floor">#${floorNumber}</div>` : '';
+  // 楼层 + 生成统计
+  let floorHtml = '';
+  if (floorNumber) {
+    let statsText = '';
+    if (!isUser && msg.metadata?.duration) {
+      const sec = (msg.metadata.duration / 1000).toFixed(1);
+      const tokens = msg.metadata.tokens || 0;
+      const tps = msg.metadata.duration > 0 && tokens > 0 ? Math.round(tokens / (msg.metadata.duration / 1000)) : 0;
+      statsText = ` · ${sec}s ${tokens}t ${tps}t/s`;
+    }
+    floorHtml = `<div class="message__floor">#${floorNumber}${statsText}</div>`;
+  }
 
   return `
     <div class="message ${roleClass}" data-msg-id="${msg.id}">
@@ -1215,6 +1260,9 @@ async function sendMessage() {
   const safeUpdateBubble = (html) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
+      if (userSettingsModule.getSettings().streamBlur !== false) {
+        blurTrailingText(streamingBubble, 18);
+      }
     }
   };
   const safeRemoveStreamingClass = () => {
@@ -1384,6 +1432,9 @@ async function regenerateMessage() {
   const safeUpdateBubble = (html) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
+      if (userSettingsModule.getSettings().streamBlur !== false) {
+        blurTrailingText(streamingBubble, 18);
+      }
     }
   };
   const safeRemoveStreamingClass = () => {
@@ -1523,6 +1574,9 @@ async function continueLastMessage(conv, lastAssistantMsg) {
   const safeUpdateBubble = (html) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
+      if (userSettingsModule.getSettings().streamBlur !== false) {
+        blurTrailingText(streamingBubble, 18);
+      }
     }
   };
   const safeRemoveStreamingClass = () => {

@@ -532,17 +532,21 @@ async function streamLLMResponse(
       signal: controller.signal,
     });
 
+    let usageTokens = 0;
     for await (const chunk of stream) {
       if (chunk.type === 'thinking') {
         fullThinking += chunk.content;
         writeSSE({ type: 'thinking', content: chunk.content });
+      } else if (chunk.type === 'usage') {
+        usageTokens = chunk.completionTokens || chunk.totalTokens || 0;
       } else {
         fullContent += chunk.content;
         writeSSE({ type: 'chunk', content: chunk.content });
       }
     }
 
-    // 保存完整内容（含思维链）
+    // token 计数：优先用 API 返回的真实值，否则用 gpt-tokenizer 估算
+    const outputTokens = usageTokens > 0 ? usageTokens : (await import('gpt-tokenizer')).encode(fullContent).length;
     if (swipeMessageId) {
       // swipe 模式：将新内容追加到 swipes 数组，思维链追加到 swipeThinkings
       const swipeMsg = conv.messages.find((m) => m.id === swipeMessageId);
@@ -557,6 +561,7 @@ async function streamLLMResponse(
         swipeIndex: newSwipes.length - 1,
         metadata: {
           duration: Date.now() - startTime,
+          tokens: outputTokens,
           model: llmConfig.model,
           ...(fullThinking ? { thinking: fullThinking } : {}),
         },
@@ -566,6 +571,7 @@ async function streamLLMResponse(
         content: fullContent,
         metadata: {
           duration: Date.now() - startTime,
+          tokens: outputTokens,
           model: llmConfig.model,
           ...(fullThinking ? { thinking: fullThinking } : {}),
         },
@@ -578,6 +584,7 @@ async function streamLLMResponse(
       content: fullContent,
       ...(fullThinking ? { thinking: fullThinking } : {}),
       duration: Date.now() - startTime,
+      tokens: outputTokens,
     });
 
     logger.info('LLM 流式生成完成', {
@@ -712,8 +719,8 @@ async function streamAiHelpReply(
 
     let fullContent = '';
     for await (const chunk of stream) {
-      // 帮答场景仅转发正文，忽略思维链
-      if (chunk.type === 'thinking') continue;
+      // 帮答场景仅转发正文，忽略思维链和 usage
+      if (chunk.type !== 'text') continue;
       fullContent += chunk.content;
       writeSSE({ type: 'chunk', content: chunk.content });
     }

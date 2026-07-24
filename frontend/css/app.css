@@ -1024,6 +1024,29 @@ mdui-card.cp-memory-card {
   font-style: italic;
   font-size: 13px;
 }
+/* 流式输出：逐字梯度模糊 */
+.st-char-blur {
+  transition: filter 0.2s ease-out, opacity 0.2s ease-out;
+}
+/* 流式输出：闪烁光标 */
+.message__bubble--streaming::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: rgb(var(--mdui-color-primary, 103 80 164));
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: st-cursor-blink 0.8s step-end infinite;
+}
+@keyframes st-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+/* 关闭平滑流式输出时隐藏光标 */
+.st-no-smooth-streaming .message__bubble--streaming::after {
+  display: none;
+}
 .message__time {
   font-size: 11px;
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
