@@ -54,36 +54,6 @@ const BUILTIN_EXTENSIONS = [
     category: 'image-gen',
   },
   {
-    id: 'memory',
-    name: 'Summarize',
-    description: '自动总结对话历史，扩展上下文长度',
-    author: 'SmartTavern',
-    version: '1.0.0',
-    enabled: false,
-    icon: 'book',
-    category: 'context',
-  },
-  {
-    id: 'note',
-    name: "Author's Note",
-    description: '在对话中插入作者备注，影响 AI 行为',
-    author: 'SmartTavern',
-    version: '1.0.0',
-    enabled: true,
-    icon: 'edit',
-    category: 'context',
-  },
-  {
-    id: 'regex',
-    name: 'Regex Scripts',
-    description: '使用正则表达式处理输入/输出文本',
-    author: 'SmartTavern',
-    version: '1.0.0',
-    enabled: true,
-    icon: 'format',
-    category: 'text',
-  },
-  {
     id: 'vectorize',
     name: 'Vector Storage',
     description: '向量化文档和对话，支持语义检索',
@@ -229,7 +199,6 @@ function renderExtensionList(container, extensions) {
     'visual': '视觉',
     'audio': '音频',
     'image-gen': '图片生成',
-    'context': '上下文',
     'text': '文本处理',
     'retrieval': '检索',
     'ui': '界面',
@@ -254,9 +223,13 @@ function renderExtensionList(container, extensions) {
       btn.style.color = ext.enabled ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-primary)';
       btn.closest('.cp-extension-item').classList.toggle('cp-extension-item--enabled', ext.enabled);
       if (ext.enabled) {
-        showSuccess(`已启用扩展"${ext.name}"`);
+        showSuccess(`已启用扩展“${ext.name}”`);
       } else {
-        showInfo(`已禁用扩展"${ext.name}"`);
+        showInfo(`已禁用扩展“${ext.name}”`);
+      }
+      // 快速回复扩展启用/禁用时通知聊天页面刷新
+      if (id === 'quick-reply') {
+        document.dispatchEvent(new CustomEvent('quick-reply-updated'));
       }
     });
   });
@@ -392,36 +365,27 @@ function showExtensionSettings(ext) {
         </div>
       </div>
     `;
-  } else if (ext.id === 'memory') {
+  } else if (ext.id === 'quick-reply') {
+    const replies = extSettings.replies || [];
     content += `
       <div class="form-group">
-        <mdui-text-field id="ext-memory-threshold" label="总结触发消息数" variant="outlined" type="number" value="${extSettings.threshold || 20}" min="5" max="100"></mdui-text-field>
+        <label style="display: flex; align-items: center; gap: var(--md-sys-spacing-2); cursor: pointer; margin-bottom: var(--md-sys-spacing-2);">
+          <mdui-switch id="ext-quick-reply-autoSend" ${extSettings.autoSend ? 'checked' : ''}></mdui-switch>
+          <span style="font-size: 14px;">点击后自动发送（关闭则仅填入输入框）</span>
+        </label>
       </div>
       <div class="form-group">
-        <mdui-text-field id="ext-memory-prompt" label="总结提示词" variant="outlined" rows="3" autosize max-rows="10" value="${escapeHtml(extSettings.prompt || 'Summarize the events of the roleplay chat so far.')}"></mdui-text-field>
-      </div>
-    `;
-  } else if (ext.id === 'note') {
-    content += `
-      <div class="form-group">
-        <mdui-text-field id="ext-note-text" label="作者备注内容" variant="outlined" rows="3" autosize max-rows="10" placeholder="在此输入作者备注" value="${escapeHtml(extSettings.text || '')}"></mdui-text-field>
-      </div>
-      <div class="mgmt-form__row">
-        <div class="form-group">
-          <mdui-select id="ext-note-position" label="注入位置" variant="outlined" value="${extSettings.position !== undefined ? extSettings.position : 0}">
-            <mdui-menu-item value="0">在聊天中</mdui-menu-item>
-            <mdui-menu-item value="1">在系统提示中</mdui-menu-item>
-          </mdui-select>
+        <label class="form-group__label">快捷回复列表</label>
+        <div id="ext-qr-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+          ${replies.map((r, i) => `
+            <div class="ext-qr-item" data-idx="${i}" style="display:flex;gap:8px;align-items:center;">
+              <mdui-text-field class="ext-qr-label" variant="outlined" placeholder="按钮文字" value="${escapeHtml(r.label || '')}" style="flex:1;"></mdui-text-field>
+              <mdui-text-field class="ext-qr-msg" variant="outlined" placeholder="发送内容" value="${escapeHtml(r.message || '')}" style="flex:2;"></mdui-text-field>
+              <mdui-button-icon icon="close" class="ext-qr-del" label="删除"></mdui-button-icon>
+            </div>
+          `).join('')}
         </div>
-        <div class="form-group">
-          <mdui-text-field id="ext-note-depth" label="注入深度" variant="outlined" type="number" value="${extSettings.depth || 4}" min="0" max="50"></mdui-text-field>
-        </div>
-      </div>
-    `;
-  } else if (ext.id === 'regex') {
-    content += `
-      <div class="form-group">
-        <mdui-text-field id="ext-regex-list" label="正则脚本列表（每行一个：名称 | 查找 | 替换 | 作用域）" variant="outlined" rows="6" autosize max-rows="15" placeholder="移除HTML | &lt;[^&gt;]+&gt; | | output" value="${escapeHtml(extSettings.list || '')}"></mdui-text-field>
+        <mdui-button variant="outlined" id="ext-qr-add" icon="add">添加快捷回复</mdui-button>
       </div>
     `;
   } else {
@@ -443,8 +407,45 @@ function showExtensionSettings(ext) {
       { text: '保存', value: 'save', type: 'filled' },
     ],
     onMount: (dialog, close) => {
+      // Quick Reply 动态增删
+      if (ext.id === 'quick-reply') {
+        dialog.querySelector('#ext-qr-add')?.addEventListener('click', () => {
+          const list = dialog.querySelector('#ext-qr-list');
+          const div = document.createElement('div');
+          div.className = 'ext-qr-item';
+          div.style.cssText = 'display:flex;gap:8px;align-items:center;';
+          div.innerHTML = '<mdui-text-field class="ext-qr-label" variant="outlined" placeholder="按钮文字" style="flex:1;"></mdui-text-field>'
+            + '<mdui-text-field class="ext-qr-msg" variant="outlined" placeholder="发送内容" style="flex:2;"></mdui-text-field>'
+            + '<mdui-button-icon icon="close" class="ext-qr-del" label="删除"></mdui-button-icon>';
+          list.appendChild(div);
+        });
+        dialog.querySelector('#ext-qr-list')?.addEventListener('click', (e) => {
+          const delBtn = e.target.closest('.ext-qr-del');
+          if (delBtn) delBtn.closest('.ext-qr-item')?.remove();
+        });
+      }
+
       dialog.querySelector('[data-action="save"]').addEventListener('click', () => {
         const newSettings = { ...settings };
+
+        // Quick Reply 特殊处理：收集动态列表
+        if (ext.id === 'quick-reply') {
+          const replies = [];
+          dialog.querySelectorAll('.ext-qr-item').forEach((item) => {
+            const label = item.querySelector('.ext-qr-label')?.value?.trim() || '';
+            const message = item.querySelector('.ext-qr-msg')?.value?.trim() || '';
+            if (message) replies.push({ label, message });
+          });
+          const autoSend = dialog.querySelector('#ext-quick-reply-autoSend')?.checked || false;
+          newSettings[ext.id] = { replies, autoSend };
+          saveExtensionSettings(newSettings);
+          close('saved');
+          showSuccess('设置已保存');
+          // 通知聊天页面刷新快速回复栏
+          document.dispatchEvent(new CustomEvent('quick-reply-updated'));
+          return;
+        }
+
         const extData = {};
 
         // 收集所有输入

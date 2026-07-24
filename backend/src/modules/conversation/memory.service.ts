@@ -303,8 +303,16 @@ export async function triggerSummaryGeneration(
 
   if (!shouldGenerateSummary(conv, memory)) return;
 
+  // 如果记忆设置指定了专用 LLM，优先使用
+  let effectiveLlmConfig = llmConfig;
+  if (memory.llmConfigId && memory.llmConfigId !== llmConfig.id) {
+    const allConfigs = await userService.getLLMConfigs(userId);
+    const memConfig = allConfigs.find((c) => c.id === memory.llmConfigId);
+    if (memConfig) effectiveLlmConfig = memConfig;
+  }
+
   // generateSummaries 返回完整的总结列表（含已有 + 新增/更新）
-  const allSummaries = await generateSummaries(conv, llmConfig, memory);
+  const allSummaries = await generateSummaries(conv, effectiveLlmConfig, memory);
 
   // 重新获取对话（可能在生成期间有新消息），保留最新 settings
   const latestConv = await conversationService.get(conversationId, userId);

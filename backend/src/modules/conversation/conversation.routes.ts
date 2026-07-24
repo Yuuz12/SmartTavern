@@ -795,7 +795,8 @@ router.post(
     if (!memory?.enabled) throw ApiError.badRequest('记忆功能未启用');
 
     const llmConfigs = await userService.getLLMConfigs(req.user.userId);
-    const llmConfig = llmConfigs.find((c) => c.id === conv.llmConfigId);
+    const targetLlmId = memory.llmConfigId || conv.llmConfigId;
+    const llmConfig = llmConfigs.find((c) => c.id === targetLlmId);
     if (!llmConfig) throw ApiError.notFound('LLM 配置不存在');
 
     // generateSummaries 返回完整的总结列表（含已有 + 新增/更新）

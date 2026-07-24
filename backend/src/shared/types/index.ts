@@ -298,6 +298,8 @@ export interface MemorySettings {
   recentSummaryCount: number;
   /** 分类配置列表 */
   categories: MemoryCategory[];
+  /** 总结专用 LLM 配置 ID（留空则跟随对话 LLM） */
+  llmConfigId?: string;
 }
 
 // ============ API 响应类型 ============

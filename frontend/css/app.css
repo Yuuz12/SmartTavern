@@ -1160,6 +1160,46 @@ body.st-display-flat .message--system .message__bubble {
   50% { opacity: 0.5; }
 }
 
+/* 快速回复栏 */
+.quick-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  background-color: rgb(var(--mdui-color-surface, 255 251 254));
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant, 202 196 208));
+  scrollbar-width: thin;
+}
+.quick-reply-bar::-webkit-scrollbar {
+  height: 4px;
+}
+.quick-reply-bar::-webkit-scrollbar-thumb {
+  background: rgb(var(--mdui-color-outline-variant, 202 196 208));
+  border-radius: 2px;
+}
+.quick-reply-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid rgb(var(--mdui-color-outline, 121 116 126));
+  background: rgb(var(--mdui-color-surface-container-low, 247 242 250));
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.quick-reply-chip:hover {
+  background: rgb(var(--mdui-color-surface-container-high, 236 230 240));
+  border-color: rgb(var(--mdui-color-primary, 103 80 164));
+}
+.quick-reply-chip:active {
+  background: rgb(var(--mdui-color-primary-container, 234 221 255));
+}
+
 /* 输入区 */
 .chat-input {
   display: flex;

@@ -140,6 +140,14 @@ function renderContent(container) {
         <mdui-switch id="memory-enabled" ${m.enabled ? 'checked' : ''}></mdui-switch>
       </div>
       <div class="cp-field">
+        <label class="cp-field__label">总结用 LLM</label>
+        <mdui-select id="memory-llm-select" variant="outlined" value="${escapeHtml(m.llmConfigId || '')}">
+          <mdui-menu-item value="">跟随对话 LLM</mdui-menu-item>
+          ${(appState.get('llmConfigs') || []).map((c) => `<mdui-menu-item value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.id)}</mdui-menu-item>`).join('')}
+        </mdui-select>
+        <div class="cp-field__desc" style="margin-top:4px;">选择用于生成总结的 LLM，留空则使用对话当前的 LLM 配置</div>
+      </div>
+      <div class="cp-field">
         <div class="cp-field__label">
           <span>最大发送层数</span>
           <span class="cp-field__desc">超过此层数的旧消息不会发送给 LLM，用总结替代。当前对话：${currentMessageCount} 层</span>
@@ -206,6 +214,13 @@ function bindSettingEvents(container) {
     // 更新生成按钮状态
     const genBtn = container.querySelector('#cp-memory-generate');
     if (genBtn) genBtn.disabled = !enableSwitch.checked;
+  });
+
+  // 总结用 LLM 选择
+  const llmSelect = container.querySelector('#memory-llm-select');
+  llmSelect?.addEventListener('change', () => {
+    currentMemory.llmConfigId = llmSelect.value || undefined;
+    saveSettings(currentMemory);
   });
 
   // 滑块

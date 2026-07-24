@@ -12,6 +12,7 @@ import { initMduiTheme } from '../utils/mduiTheme.js';
 import { formatRelativeTime, formatTime, renderMarkdown, escapeHtml, truncate, copyToClipboard, debounce } from '../utils/helpers.js';
 import { applyCodeRendering } from '../utils/codeRenderer.js';
 import { applyRegexScripts } from '../utils/regexEngine.js';
+import storage from '../utils/storage.js';
 import controlPanel from '../controlPanel/index.js';
 import { renderResponseConfig, getCurrentPrompts, applyActivePresetRegex } from '../controlPanel/responseConfig.js';
 import * as userSettingsModule from '../controlPanel/userSettings.js';
@@ -114,6 +115,12 @@ async function init() {
   // 绑定事件
   bindEvents();
 
+  // 初始渲染快速回复栏
+  renderQuickReplies();
+
+  // 监听快速回复设置更新
+  document.addEventListener('quick-reply-updated', renderQuickReplies);
+
   // 监听状态变化
   appState.subscribe('sidebarCollapsed', applySidebarState);
   appState.subscribe('asideCollapsed', applyAsideState);
@@ -202,6 +209,7 @@ export async function selectConversation(id) {
     renderMessages();
     renderAside();
     renderTopBar();
+    renderQuickReplies();
     document.getElementById('chat-input-area').style.display = 'flex';
 
     // 移动端关闭侧栏
@@ -1965,6 +1973,52 @@ function bindEvents() {
       e.preventDefault();
       themeState.toggleTheme();
     }
+  });
+}
+
+// ============ 快速回复 ============
+function renderQuickReplies() {
+  const bar = document.getElementById('quick-reply-bar');
+  if (!bar) return;
+
+  // 检查扩展是否启用
+  const extState = storage.get('cp_extensions', {});
+  const extSettings = storage.get('cp_extension_settings', {});
+  if (!extState['quick-reply']) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const qrSettings = extSettings['quick-reply'] || {};
+  const replies = qrSettings.replies || [];
+  if (replies.length === 0) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const autoSend = qrSettings.autoSend === true;
+  bar.style.display = 'flex';
+  bar.innerHTML = replies.map((r, i) =>
+    '<button class="quick-reply-chip" data-idx="' + i + '">' + escapeHtml(r.label || r.message) + '</button>'
+  ).join('');
+
+  bar.querySelectorAll('.quick-reply-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const idx = parseInt(chip.dataset.idx, 10);
+      const reply = replies[idx];
+      if (!reply) return;
+      const input = document.getElementById('message-input');
+      if (!input) return;
+      input.value = reply.message;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (autoSend) {
+        sendMessage();
+      } else {
+        input.focus();
+      }
+    });
   });
 }
 
