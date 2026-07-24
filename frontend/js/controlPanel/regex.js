@@ -51,11 +51,12 @@ export function renderRegex(container, { force } = {}) {
         <div class="cp-section__actions">
           <mdui-button variant="outlined" id="regex-add-global" icon="add">新建全局</mdui-button>
           <mdui-button variant="outlined" id="regex-add-char" icon="add">新建角色</mdui-button>
+          <mdui-button variant="outlined" id="regex-add-preset" icon="add">新建预设</mdui-button>
         </div>
       </div>
       <p class="cp-section__desc">正则脚本可自动替换 AI 回复显示、用户输入或发送给 LLM 的提示词中的文本模式。</p>
       <div id="regex-list" class="regex-list"></div>
-      <div id="regex-preset-section" style="display:none;">
+      <div id="regex-preset-section">
         <h3 class="cp-section__title" style="margin-top:16px;font-size:13px;">预设正则（随预设加载/卸载）</h3>
         <div id="regex-preset-list" class="regex-list"></div>
       </div>
@@ -64,6 +65,7 @@ export function renderRegex(container, { force } = {}) {
 
   container.querySelector('#regex-add-global').addEventListener('click', () => addScript('global'));
   container.querySelector('#regex-add-char').addEventListener('click', () => addScript('character'));
+  container.querySelector('#regex-add-preset').addEventListener('click', () => addPresetScript());
 
   loadScripts(container);
 }
@@ -140,11 +142,10 @@ function renderPresetList(container) {
 
   presetScripts = appState.get('presetRegexScripts') || [];
   if (presetScripts.length === 0) {
-    section.style.display = 'none';
+    listEl.innerHTML = '<div class="cp-empty"><div class="cp-empty__desc">当前预设无正则脚本，点击“新建预设”添加</div></div>';
     return;
   }
 
-  section.style.display = '';
   const sorted = [...presetScripts].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   listEl.innerHTML = sorted.map((s) => renderScriptItem(s, '预设')).join('');
 
@@ -403,6 +404,32 @@ async function addScript(scope) {
   setTimeout(() => {
     const listEl = getContainer()?.querySelector('#regex-list');
     if (listEl) toggleEditor(newScript.id, listEl);
+  }, 50);
+}
+
+function addPresetScript() {
+  const newScript = {
+    id: 'regex_preset_' + Date.now(),
+    name: '新预设正则',
+    findRegex: '',
+    replaceWith: '',
+    trimOut: '',
+    enabled: true,
+    affects: { display: true, userInput: false, prompt: false },
+    scope: 'global',
+    minDepth: undefined,
+    maxDepth: undefined,
+    order: presetScripts.length,
+  };
+
+  presetScripts.push(newScript);
+  savePresetScripts();
+  renderPresetList(getContainer());
+
+  // 自动打开编辑器
+  setTimeout(() => {
+    const listEl = getContainer()?.querySelector('#regex-preset-list');
+    if (listEl) toggleEditor(newScript.id, listEl, presetScripts, savePresetScriptsAndRender);
   }, 50);
 }
 
