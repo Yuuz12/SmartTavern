@@ -14,16 +14,6 @@ const EXTENSION_SETTINGS_KEY = 'cp_extension_settings';
 // 内置扩展列表（参考 SillyTavern 的核心扩展）
 const BUILTIN_EXTENSIONS = [
   {
-    id: 'caption',
-    name: 'Image Captioning',
-    description: '为图片生成描述文字，支持多模态模型',
-    author: 'SmartTavern',
-    version: '1.0.0',
-    enabled: false,
-    icon: 'image',
-    category: 'multimodal',
-  },
-  {
     id: 'expressions',
     name: 'Character Expressions',
     description: '根据对话内容动态切换角色表情',
@@ -195,7 +185,6 @@ function renderExtensionList(container, extensions) {
   });
 
   const categoryNames = {
-    'multimodal': '多模态',
     'visual': '视觉',
     'audio': '音频',
     'image-gen': '图片生成',
@@ -328,17 +317,7 @@ function showExtensionSettings(ext) {
   `;
 
   // 根据扩展类型显示不同的设置
-  if (ext.id === 'caption') {
-    content += `
-      <div class="form-group">
-        <mdui-text-field id="ext-caption-prompt" label="图片描述提示词" variant="outlined" rows="3" autosize max-rows="10" value="${escapeHtml(extSettings.prompt || 'Describe this image in detail.')}"></mdui-text-field>
-      </div>
-      <label style="display: flex; align-items: center; gap: var(--md-sys-spacing-2); cursor: pointer;">
-        <mdui-switch id="ext-caption-refine" ${extSettings.refineMode ? 'checked' : ''}></mdui-switch>
-        <span style="font-size: 14px;">精细模式</span>
-      </label>
-    `;
-  } else if (ext.id === 'tts') {
+  if (ext.id === 'tts') {
     content += `
       <div class="form-group">
         <mdui-select id="ext-tts-provider" label="TTS 服务" variant="outlined" value="${extSettings.provider || 'browser'}">
