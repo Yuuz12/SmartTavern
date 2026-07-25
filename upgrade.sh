@@ -89,6 +89,9 @@ if [[ -d "backend" ]]; then
     # 删除依赖
     [[ -d "backend/node_modules" ]] && rm -rf backend/node_modules && ok "已删除 backend/node_modules/"
 
+    # 删除测试覆盖率
+    [[ -d "backend/coverage" ]] && rm -rf backend/coverage && ok "已删除 backend/coverage/"
+
     # 删除配置/元数据文件（不删 .env）
     for f in package.json package-lock.json tsconfig.json jest.config.js .env.example; do
         [[ -f "backend/$f" ]] && rm -f "backend/$f" && ok "已删除 backend/$f"
@@ -109,8 +112,8 @@ done
 # 旧版升级脚本自身（新版解压会覆盖）
 # 注意：不在这里删除自身，解压时会自动覆盖
 
-# 清理可能残留的临时文件
-find . -maxdepth 3 -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name ".DS_Store" -o -name "Thumbs.db" 2>/dev/null | while read -r f; do
+# 清理可能残留的临时文件（注意：-o 需用括号分组，否则 -maxdepth 只作用于第一个条件）
+find . -maxdepth 3 \( -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name "*.temp" -o -name "*.cache" -o -name "*.pid" -o -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" \) 2>/dev/null | while read -r f; do
     rm -f "$f"
 done
 
