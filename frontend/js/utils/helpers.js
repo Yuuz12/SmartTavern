@@ -89,6 +89,14 @@ export function escapeHtml(text) {
 }
 
 /**
+ * 对话高亮配置（由 userSettings 通过 setDialogHighlightConfig 设置）
+ */
+let _dialogHighlightConfig = { enabled: false, pairs: [] };
+export function setDialogHighlightConfig(enabled, pairs) {
+  _dialogHighlightConfig = { enabled: !!enabled, pairs: pairs || [] };
+}
+
+/**
  * Markdown 渲染（支持原始 HTML）
  * 支持代码块、行内代码、粗体、斜体、标题、列表、引用、原始 HTML 标签
  * 与 SillyTavern 一致：允许 AI 回复中的 HTML 标签直接渲染
@@ -114,38 +122,43 @@ export function renderMarkdown(text) {
   });
 
   // 3. 处理块级元素（按行处理，保留原始 HTML）
+  // 单个换行符 \n 渲染为 <br>，双换行（空行）形成段落空行
   const lines = processed.split('\n');
   const outputLines = [];
   let inList = false;
+  let lastWasText = false;
 
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
     // 标题
-    if (/^### /.test(line)) { outputLines.push(`<h3>${line.slice(4)}</h3>`); continue; }
-    if (/^## /.test(line)) { outputLines.push(`<h2>${line.slice(3)}</h2>`); continue; }
-    if (/^# /.test(line)) { outputLines.push(`<h1>${line.slice(2)}</h1>`); continue; }
+    if (/^### /.test(line)) { outputLines.push(`<h3>${line.slice(4)}</h3>`); lastWasText = false; continue; }
+    if (/^## /.test(line)) { outputLines.push(`<h2>${line.slice(3)}</h2>`); lastWasText = false; continue; }
+    if (/^# /.test(line)) { outputLines.push(`<h1>${line.slice(2)}</h1>`); lastWasText = false; continue; }
 
     // 引用
-    if (/^> /.test(line)) { outputLines.push(`<blockquote>${line.slice(2)}</blockquote>`); continue; }
+    if (/^> /.test(line)) { outputLines.push(`<blockquote>${line.slice(2)}</blockquote>`); lastWasText = false; continue; }
 
     // 无序列表
     if (/^[\-\*] /.test(line)) {
       if (!inList) { outputLines.push('<ul>'); inList = true; }
       outputLines.push(`<li>${line.slice(2)}</li>`);
+      lastWasText = false;
       continue;
     }
     if (inList) { outputLines.push('</ul>'); inList = false; }
 
     // 空行
-    if (line.trim() === '') { outputLines.push('<br>'); continue; }
+    if (line.trim() === '') { outputLines.push('<br>'); lastWasText = true; continue; }
 
     // 普通行（保留原始 HTML 标签）
+    if (lastWasText) outputLines.push('<br>');
     outputLines.push(line);
+    lastWasText = true;
   }
   if (inList) outputLines.push('</ul>');
 
-  processed = outputLines.join('\n');
+  processed = outputLines.join('');
 
   // 4. 行内格式（粗体/斜体）
   processed = processed.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
@@ -158,7 +171,80 @@ export function renderMarkdown(text) {
   // 6. 恢复代码块
   processed = processed.replace(/\x00CODEBLOCK_(\d+)\x00/g, (_, idx) => codeBlocks[Number(idx)]);
 
+  // 7. 人物对话高亮
+  if (_dialogHighlightConfig.enabled && _dialogHighlightConfig.pairs.length) {
+    processed = highlightDialogs(processed, _dialogHighlightConfig.pairs);
+  }
+
   return processed;
+}
+
+/**
+ * 高亮对话内容（被引号对包裹的文本）
+ * 用 DOM 遍历文本节点，跳过 code/pre/thinking-body 等区域，避免破坏标签
+ * @param {string} html - 已渲染的 HTML 字符串
+ * @param {Array<{open:string,close:string,enabled?:boolean}>} pairs - 引号对
+ * @returns {string} 高亮后的 HTML
+ */
+export function highlightDialogs(html, pairs) {
+  if (!html || !pairs || pairs.length === 0) return html;
+  const validPairs = pairs.filter((p) => p && p.enabled !== false && p.open && p.close);
+  if (validPairs.length === 0) return html;
+
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = validPairs.map((p) => `${escapeRe(p.open)}([\\s\\S]*?)${escapeRe(p.close)}`).join('|');
+  const re = new RegExp(pattern, 'g');
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let el = node.parentElement;
+      while (el && el !== container) {
+        const tag = el.tagName;
+        if (tag === 'CODE' || tag === 'PRE' || tag === 'STYLE' || tag === 'SCRIPT'
+          || el.classList?.contains('message__thinking-body')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        el = el.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+
+  nodes.forEach((node) => {
+    const text = node.nodeValue;
+    if (!text) return;
+    re.lastIndex = 0;
+    if (!re.test(text)) return;
+    re.lastIndex = 0;
+
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) {
+        frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      }
+      const span = document.createElement('span');
+      span.className = 'st-dialog-quote';
+      span.textContent = m[0];
+      frag.appendChild(span);
+      last = m.index + m[0].length;
+      if (m[0].length === 0) re.lastIndex++; // 防止零宽匹配死循环
+    }
+    if (last < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(last)));
+    }
+    node.parentNode.replaceChild(frag, node);
+  });
+
+  return container.innerHTML;
 }
 
 /**

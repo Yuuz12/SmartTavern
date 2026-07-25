@@ -81,7 +81,7 @@ async function init() {
   // 检查登录
   const user = await userState.init();
   if (!user) {
-    window.location.replace('/pages/login.html');
+    window.location.replace('/login');
     return;
   }
 
@@ -912,7 +912,7 @@ export async function showCreateConversationModal(presetCharacterId = null) {
 
   if (!characters || characters.length === 0) {
     showError('请先创建角色卡');
-    window.location.href = '/pages/characters.html';
+    window.location.href = '/characters';
     return;
   }
   if (!llmConfigs || llmConfigs.length === 0) {
@@ -1865,10 +1865,10 @@ function setupUserMenu() {
 
       const menu = document.createElement('mdui-menu');
       menu.innerHTML = `
-        <mdui-menu-item href="/pages/characters.html" icon="account_box">角色卡管理</mdui-menu-item>
-        <mdui-menu-item href="/pages/worldbooks.html" icon="menu_book">世界书管理</mdui-menu-item>
-        <mdui-menu-item href="/pages/settings.html" icon="settings">设置</mdui-menu-item>
-        ${isAdmin ? `<mdui-divider></mdui-divider><mdui-menu-item href="/pages/settings.html#users" icon="manage_accounts">用户管理</mdui-menu-item>` : ''}
+        <mdui-menu-item href="/characters" icon="account_box">角色卡管理</mdui-menu-item>
+        <mdui-menu-item href="/worldbooks" icon="menu_book">世界书管理</mdui-menu-item>
+        <mdui-menu-item href="/settings" icon="settings">设置</mdui-menu-item>
+        ${isAdmin ? `<mdui-divider></mdui-divider><mdui-menu-item href="/settings#users" icon="manage_accounts">用户管理</mdui-menu-item>` : ''}
         <mdui-divider></mdui-divider>
         <mdui-menu-item id="logout-menu-item" icon="logout" style="color: rgb(var(--mdui-color-error));">退出登录</mdui-menu-item>
       `;
@@ -1888,10 +1888,10 @@ function setupUserMenu() {
           trigger: userMenuBtn,
           position: 'top-end',
           menus: [
-            { text: '角色卡管理', icon: 'account_box', href: '/pages/characters.html' },
-            { text: '世界书管理', icon: 'menu_book', href: '/pages/worldbooks.html' },
-            { text: '设置', icon: 'settings', href: '/pages/settings.html' },
-            ...(isAdmin ? [{ divider: true }, { text: '用户管理', icon: 'manage_accounts', href: '/pages/settings.html#users' }] : []),
+            { text: '角色卡管理', icon: 'account_box', href: '/characters' },
+            { text: '世界书管理', icon: 'menu_book', href: '/worldbooks' },
+            { text: '设置', icon: 'settings', href: '/settings' },
+            ...(isAdmin ? [{ divider: true }, { text: '用户管理', icon: 'manage_accounts', href: '/settings#users' }] : []),
             { divider: true },
             { text: '退出登录', icon: 'logout', onclick: async () => {
               const ok = await confirm('确定要退出登录吗？', '退出登录');
@@ -1902,7 +1902,7 @@ function setupUserMenu() {
         });
       } else {
         // 兜底：跳转到设置页
-        window.location.href = '/pages/settings.html';
+        window.location.href = '/settings';
       }
     });
   }

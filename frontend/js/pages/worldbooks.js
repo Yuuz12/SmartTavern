@@ -20,7 +20,7 @@ async function init() {
 
   const user = await userState.init();
   if (!user) {
-    window.location.replace('/pages/login.html');
+    window.location.replace('/login');
     return;
   }
 
@@ -449,7 +449,7 @@ async function handleImport(file) {
 // ============ 事件 ============
 function bindEvents() {
   document.getElementById('back-btn').addEventListener('click', () => {
-    window.location.href = '/pages/chat.html';
+    window.location.href = '/chat';
   });
 
   document.getElementById('theme-toggle').addEventListener('click', () => {

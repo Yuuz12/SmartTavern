@@ -8,7 +8,7 @@ import { themeState } from '../stores/themeState.js';
 import storage from '../utils/storage.js';
 import { showSuccess, showError } from '../components/Toast.js';
 import { getIcon } from '../components/Icon.js';
-import { escapeHtml } from '../utils/helpers.js';
+import { escapeHtml, setDialogHighlightConfig } from '../utils/helpers.js';
 import { applyThemeColor } from '../utils/mduiTheme.js';
 
 const STORAGE_KEY = 'cp_user_settings';
@@ -22,6 +22,18 @@ const THEME_COLOR_PRESETS = [
   { name: '粉', value: '#C2185B' },
   { name: '红', value: '#D32F2F' },
   { name: '靖蓝', value: '#303F9F' },
+];
+
+const DEFAULT_QUOTE_PAIRS = [
+  { open: '\u201c', close: '\u201d', name: '中文双引号', enabled: true },
+  { open: '\u2018', close: '\u2019', name: '中文单引号', enabled: true },
+  { open: '「', close: '」', name: '日式单引号', enabled: true },
+  { open: '『', close: '』', name: '日式双引号', enabled: true },
+  { open: '【', close: '】', name: '中方括号', enabled: true },
+  { open: '（', close: '）', name: '中文括号', enabled: false },
+  { open: '(', close: ')', name: '英文括号', enabled: false },
+  { open: '"', close: '"', name: '英文双引号', enabled: false },
+  { open: "'", close: "'", name: '英文单引号', enabled: false },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -48,6 +60,9 @@ const DEFAULT_SETTINGS = {
   renderEnabled: true,
   collapseCodeBlock: 'frontend_only',
   aiHelpPrompt: '',
+  dialogHighlight: true,
+  dialogQuotePairs: DEFAULT_QUOTE_PAIRS,
+  dialogHighlightBold: false,
   customCss: '',
 };
 
@@ -209,6 +224,23 @@ export function renderUserSettings(container, opts = {}) {
           <mdui-menu-item value="flat">平铺</mdui-menu-item>
         </mdui-select>
       </div>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">人物对话高亮</div>
+          <div class="cp-switch-row__desc">用主题色高亮引号包裹的对话内容</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <mdui-button id="edit-dialog-quotes" variant="outlined">引号对</mdui-button>
+          <mdui-switch id="dialog-highlight" ${settings.dialogHighlight ? 'checked' : ''}></mdui-switch>
+        </div>
+      </div>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">对话高亮加粗</div>
+          <div class="cp-switch-row__desc">将高亮的对话文字加粗显示</div>
+        </div>
+        <mdui-switch id="dialog-bold" ${settings.dialogHighlightBold ? 'checked' : ''}></mdui-switch>
+      </div>
     </div>
 
     <div class="cp-section">
@@ -348,6 +380,8 @@ function bindEvents(container) {
     { id: 'send-on-enter', key: 'sendOnEnter' },
     { id: 'confirm-delete', key: 'confirmMessageDelete' },
     { id: 'expand-thinking', key: 'expandThinkingAfterComplete' },
+    { id: 'dialog-highlight', key: 'dialogHighlight' },
+    { id: 'dialog-bold', key: 'dialogHighlightBold' },
   ];
   switches.forEach(({ id, key }) => {
     const el = container.querySelector(`#${id}`);
@@ -408,6 +442,72 @@ function bindEvents(container) {
     }
   });
 
+  // 人物对话引号对编辑
+  container.querySelector('#edit-dialog-quotes')?.addEventListener('click', async () => {
+    const { showModal } = await import('../components/Modal.js');
+    let pairs = (getSettings().dialogQuotePairs || []).map((p) => ({ ...p }));
+    const result = await showModal({
+      title: '对话引号对',
+      content: `
+        <div id="dialog-quote-list" style="display:flex;flex-direction:column;gap:6px;min-width:300px;"></div>
+        <mdui-divider style="margin:12px 0;"></mdui-divider>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <mdui-text-field id="new-quote-name" variant="outlined" label="名称" style="flex:1;min-width:100px;"></mdui-text-field>
+          <mdui-text-field id="new-quote-open" variant="outlined" label="开" style="width:64px;"></mdui-text-field>
+          <mdui-text-field id="new-quote-close" variant="outlined" label="闭" style="width:64px;"></mdui-text-field>
+          <mdui-button id="add-quote-pair" variant="tonal">添加</mdui-button>
+        </div>
+      `,
+      actions: [
+        { text: '取消', value: 'cancel', type: 'text' },
+        { text: '保存', value: 'ok', type: 'filled' },
+      ],
+      onMount: (dialog, close) => {
+        const listEl = dialog.querySelector('#dialog-quote-list');
+        const renderList = () => {
+          listEl.innerHTML = pairs.map((p, i) => `
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 8px;border-radius:8px;background:rgb(var(--mdui-color-surface-container-high,236 230 240));">
+              <mdui-switch ${p.enabled ? 'checked' : ''} data-toggle="${i}"></mdui-switch>
+              <span style="font-size:15px;min-width:80px;">${escapeHtml(p.open)}内容${escapeHtml(p.close)}</span>
+              <span style="flex:1;font-size:12px;color:rgb(var(--mdui-color-on-surface-variant,73 69 79));">${escapeHtml(p.name)}</span>
+              <mdui-button-icon icon="delete" data-del="${i}" label="删除" style="color: var(--md-sys-color-error);"></mdui-button-icon>
+            </div>
+          `).join('');
+          listEl.querySelectorAll('[data-toggle]').forEach((sw) => {
+            sw.addEventListener('change', () => {
+              pairs[Number(sw.dataset.toggle)].enabled = sw.checked;
+            });
+          });
+          listEl.querySelectorAll('[data-del]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              pairs.splice(Number(btn.dataset.del), 1);
+              renderList();
+            });
+          });
+        };
+        renderList();
+        dialog.querySelector('#add-quote-pair').addEventListener('click', () => {
+          const nameEl = dialog.querySelector('#new-quote-name');
+          const openEl = dialog.querySelector('#new-quote-open');
+          const closeEl = dialog.querySelector('#new-quote-close');
+          const open = openEl.value;
+          const close = closeEl.value;
+          if (!open || !close) { showError('请输入开闭引号'); return; }
+          pairs.push({ name: nameEl.value.trim() || '自定义', open, close, enabled: true });
+          nameEl.value = ''; openEl.value = ''; closeEl.value = '';
+          renderList();
+        });
+        dialog.querySelector('[data-action="ok"]').addEventListener('click', () => {
+          close(pairs);
+        });
+      },
+    });
+    if (Array.isArray(result)) {
+      updateSettings({ dialogQuotePairs: result });
+      showSuccess('已保存引号对');
+    }
+  });
+
   // 恢复默认
   container.querySelector('#cp-reset-settings')?.addEventListener('click', async () => {
     const { confirm } = await import('../components/Modal.js');
@@ -458,6 +558,10 @@ export function applySettings(settings) {
     document.head.appendChild(styleEl);
   }
   styleEl.textContent = settings.customCss || '';
+
+  // 人物对话高亮
+  setDialogHighlightConfig(settings.dialogHighlight !== false, settings.dialogQuotePairs);
+  document.body.classList.toggle('st-dialog-quote-bold', settings.dialogHighlightBold === true);
 }
 
 export default { renderUserSettings, applySettings, updateSettings, getSettings, DEFAULT_SETTINGS };

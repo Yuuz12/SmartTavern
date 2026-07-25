@@ -23,12 +23,12 @@
       try {
         const user = await userState.init();
         if (user) {
-          window.location.replace('/pages/chat.html');
+          window.location.replace('/chat');
         } else {
-          window.location.replace('/pages/login.html');
+          window.location.replace('/login');
         }
       } catch (err) {
-        window.location.replace('/pages/login.html');
+        window.location.replace('/login');
       }
     })();
   </script>

@@ -55,7 +55,7 @@ class UserState {
     clearTokens();
     appState.set('user', null);
     appState.set('currentConversation', null);
-    window.location.href = '/pages/login.html';
+    window.location.href = '/login';
   }
 
   /**

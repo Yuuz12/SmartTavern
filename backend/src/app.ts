@@ -73,6 +73,25 @@ app.get('/api/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
 });
 
+// ============ 前端伪静态路由重写 ============
+// 将 /chat、/login 等简洁路径映射到对应 HTML 文件
+const pageRewrites: Record<string, string> = {
+  '/chat': '/pages/chat.html',
+  '/login': '/pages/login.html',
+  '/characters': '/pages/characters.html',
+  '/worldbooks': '/pages/worldbooks.html',
+  '/settings': '/pages/settings.html',
+};
+app.use((req, _res, next) => {
+  const target = pageRewrites[req.path];
+  if (target) {
+    const queryIndex = req.url.indexOf('?');
+    const query = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
+    req.url = target + query;
+  }
+  next();
+});
+
 // ============ 前端静态文件（生产环境） ============
 const frontendPath = path.resolve(__dirname, '..', '..', 'frontend');
 if (await fs.pathExists(frontendPath)) {

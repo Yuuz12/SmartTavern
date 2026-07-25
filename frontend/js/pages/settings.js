@@ -19,7 +19,7 @@ async function init() {
 
   currentUser = await userState.init();
   if (!currentUser) {
-    window.location.replace('/pages/login.html');
+    window.location.replace('/login');
     return;
   }
 
@@ -590,7 +590,7 @@ async function showChangePasswordForm() {
 function bindEvents() {
   // 返回
   document.getElementById('back-btn').addEventListener('click', () => {
-    window.location.href = '/pages/chat.html';
+    window.location.href = '/chat';
   });
 
   // 主题切换

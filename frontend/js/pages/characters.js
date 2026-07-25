@@ -23,7 +23,7 @@ async function init() {
   // 检查登录
   const user = await userState.init();
   if (!user) {
-    window.location.replace('/pages/login.html');
+    window.location.replace('/login');
     return;
   }
 
@@ -132,7 +132,7 @@ async function handleAction(action, id) {
   switch (action) {
     case 'chat':
       // 跳转到聊天页并预选角色卡（通过 URL 参数）
-      window.location.href = `/pages/chat.html?characterId=${id}`;
+      window.location.href = `/chat?characterId=${id}`;
       break;
     case 'edit':
       showCharacterForm(character);
@@ -544,7 +544,7 @@ async function handleImport(file) {
 function bindEvents() {
   // 返回
   document.getElementById('back-btn').addEventListener('click', () => {
-    window.location.href = '/pages/chat.html';
+    window.location.href = '/chat';
   });
 
   // 主题切换

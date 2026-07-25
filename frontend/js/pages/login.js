@@ -16,7 +16,7 @@ themeState.init();
 if (getAccessToken()) {
   userState.init()
     .then((user) => {
-      if (user) window.location.replace('/pages/chat.html');
+      if (user) window.location.replace('/chat');
     })
     .catch(() => {});
 }
@@ -124,7 +124,7 @@ loginForm.addEventListener('submit', async (e) => {
   try {
     const user = await userState.login(username, password);
     showToast(`欢迎回来，${user.username}`, { type: 'success' });
-    window.location.href = '/pages/chat.html';
+    window.location.href = '/chat';
   } catch (err) {
     showError(err.message || '登录失败');
   } finally {
@@ -173,7 +173,7 @@ registerForm.addEventListener('submit', async (e) => {
     const user = await userState.register(username, password);
     const roleText = user.role === 'admin' ? '管理员' : '用户';
     showToast(`注册成功，欢迎 ${user.username}（${roleText}）`, { type: 'success' });
-    window.location.href = '/pages/chat.html';
+    window.location.href = '/chat';
   } catch (err) {
     showError(err.message || '注册失败');
   } finally {

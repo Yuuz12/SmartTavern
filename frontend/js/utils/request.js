@@ -280,9 +280,9 @@ export async function postStream(url, body, callbacks = {}, signal) {
  * 跳转登录页
  */
 function redirectToLogin() {
-  if (!window.location.pathname.includes('/pages/login.html') &&
-      !window.location.pathname.includes('/pages/register.html')) {
-    window.location.href = '/pages/login.html';
+  if (!window.location.pathname.includes('/login') &&
+      !window.location.pathname.includes('/register')) {
+    window.location.href = '/login';
   }
 }
 
