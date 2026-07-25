@@ -149,7 +149,7 @@ Get-ChildItem -Path $stagingPath -Recurse -Directory -Filter "node_modules" -Err
     ForEach-Object { Remove-Item -Recurse -Force $_.FullName; Write-Ok "已移除 $($_.FullName.Replace($stagingPath, ''))" }
 
 # 移除临时/系统文件
-$junk = Get-ChildItem -Path $stagingPath -Recurse -Include "*.log", "*.tmp", "*.bak", "*.temp", "*.cache", "*.swp", "*.swo", ".DS_Store", "Thumbs.db", "desktop.ini", ".eslintcache" -ErrorAction SilentlyContinue
+$junk = Get-ChildItem -Path $stagingPath -Recurse -Include "*.log", "*.tmp", "*.bak", "*.temp", "*.cache", "*.swp", "*.swo", "*.tsbuildinfo", ".DS_Store", "Thumbs.db", "desktop.ini", ".eslintcache" -ErrorAction SilentlyContinue
 foreach ($j in $junk) { Remove-Item -Force $j.FullName }
 
 # 5. 打包 zip

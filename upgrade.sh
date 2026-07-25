@@ -109,11 +109,15 @@ for f in package.json package-lock.json .gitignore INSTALL.md LICENSE README.md;
     [[ -f "$f" ]] && rm -f "$f" && ok "已删除 $f"
 done
 
+# 发布产物（如果在安装目录执行过发布）
+[[ -d "release" ]] && rm -rf release && ok "已删除 release/"
+[[ -d ".release-staging" ]] && rm -rf .release-staging && ok "已删除 .release-staging/"
+
 # 旧版升级脚本自身（新版解压会覆盖）
 # 注意：不在这里删除自身，解压时会自动覆盖
 
 # 清理可能残留的临时文件（注意：-o 需用括号分组，否则 -maxdepth 只作用于第一个条件）
-find . -maxdepth 3 \( -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name "*.temp" -o -name "*.cache" -o -name "*.pid" -o -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" \) 2>/dev/null | while read -r f; do
+find . -maxdepth 3 \( -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name "*.temp" -o -name "*.cache" -o -name "*.pid" -o -name "*.tsbuildinfo" -o -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" \) 2>/dev/null | while read -r f; do
     rm -f "$f"
 done
 
@@ -123,7 +127,7 @@ echo -e " ${GREEN}升级清理完成！${NC}"
 echo ""
 echo " 接下来请解压新版发布包到当前目录:"
 echo "   unzip SmartTavern-vX.X.X.zip"
-echo "   cp -r SmartTavern-vX.X.X/* ."
+echo "   cp -a SmartTavern-vX.X.X/. ."
 echo "   rm -rf SmartTavern-vX.X.X"
 echo ""
 echo " 然后安装依赖并启动:"
