@@ -1560,6 +1560,46 @@ body.st-display-flat .message--system .message__bubble {
   font-weight: 500;
 }
 
+/* ============ 头像上传组件 ============ */
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.avatar-upload__preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgb(var(--mdui-color-surface-container-high, 236 224 232));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 2px dashed rgb(var(--mdui-color-outline-variant, 202 196 208));
+  transition: border-color 0.2s;
+}
+.avatar-upload__preview:hover {
+  border-color: rgb(var(--mdui-color-primary, 103 80 164));
+}
+.avatar-upload__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-upload__placeholder {
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  text-align: center;
+  padding: 4px;
+}
+.avatar-upload__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* ============ 设置页 ============ */
 .settings-sections {
   max-width: 800px;

@@ -77,7 +77,7 @@ export const conversationApi = {
   sendMessage: (id, content, callbacks, signal, extraBody) => postStream(`/conversations/${id}/messages`, { content, ...extraBody }, callbacks, signal),
   regenerate: (id, callbacks, signal, extraBody) => postStream(`/conversations/${id}/regenerate`, { ...extraBody }, callbacks, signal),
   continue: (id, callbacks, signal, extraBody) => postStream(`/conversations/${id}/continue`, { ...extraBody }, callbacks, signal),
-  aiHelp: (id, callbacks, signal) => postStream(`/conversations/${id}/ai-help`, {}, callbacks, signal),
+  aiHelp: (id, callbacks, signal, body) => postStream(`/conversations/${id}/ai-help`, { ...body }, callbacks, signal),
   deleteMessage: (id, msgId) => del(`/conversations/${id}/messages/${msgId}`),
   updateMessage: (id, msgId, content) => put(`/conversations/${id}/messages/${msgId}`, { content }),
   swipe: (id, callbacks, signal, extraBody) => postStream(`/conversations/${id}/swipe`, { ...extraBody }, callbacks, signal),
@@ -94,6 +94,7 @@ export const conversationApi = {
 export const fileApi = {
   uploadAvatar: (file) => upload('/files/avatar', file, 'file'),
   uploadCharacterImage: (file) => upload('/files/character', file, 'file'),
+  deleteFile: (url) => del('/files', { url }),
 };
 
 export default {

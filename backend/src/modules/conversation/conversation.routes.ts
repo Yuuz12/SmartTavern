@@ -678,8 +678,9 @@ async function streamAiHelpReply(
     .filter((m) => m.role !== 'system')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  // 帮答系统提示词：引导 LLM 以用户身份生成推进剧情的回复
-  const helpSystemPrompt =
+  // 帮答系统提示词：用户自定义或默认
+  const customPrompt = (req.body?.aiHelpPrompt as string)?.trim();
+  const helpSystemPrompt = customPrompt ||
     '你是一个角色扮演对话助手。以下是用户与角色（智能体）之间的对话历史。' +
     '请根据角色最新的回复，以用户的身份撰写一个自然、符合语境、能够推进剧情发展的回复。\n\n' +
     '要求：\n' +

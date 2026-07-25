@@ -3,11 +3,12 @@
  * 角色列表 + 创建/编辑/删除
  */
 import appState from '../stores/appState.js';
-import { characterApi, worldbookApi, conversationApi } from '../api/index.js';
+import { characterApi, worldbookApi, conversationApi, fileApi } from '../api/index.js';
 import { showSuccess, showError, showInfo } from '../components/Toast.js';
 import { showModal, confirm } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { escapeHtml, truncate, readFileAsJson, downloadFile, debounce, formatRelativeTime } from '../utils/helpers.js';
+import { insertTextChunk, createPlaceholderPng, encodeBase64, extractTextChunk, decodeBase64, isValidPng } from '../utils/pngMeta.js';
 
 let allCharacters = [];
 let allWorldbooks = [];
@@ -49,9 +50,25 @@ export async function renderCharacters(container, opts = {}) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const data = await readFileAsJson(file);
-      await characterApi.import(data);
-      showSuccess('导入成功');
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext === 'png') {
+        const buffer = await file.arrayBuffer();
+        if (!isValidPng(buffer)) { showError('无效的 PNG 文件'); return; }
+        const charaData = extractTextChunk(buffer, 'chara');
+        if (!charaData) { showError('该 PNG 中未找到角色卡数据'); return; }
+        const data = JSON.parse(decodeBase64(charaData));
+        try {
+          const result = await fileApi.uploadCharacterImage(file);
+          if (data.data) data.data.avatar = result.url;
+          else data.avatar = result.url;
+        } catch { /* 头像上传失败不影响导入 */ }
+        await characterApi.import(data);
+        showSuccess('导入成功（PNG）');
+      } else {
+        const data = await readFileAsJson(file);
+        await characterApi.import(data);
+        showSuccess('导入成功');
+      }
       await loadList(container);
     } catch (err) {
       showError(err.message || '导入失败');
@@ -140,8 +157,22 @@ function renderGrid(container) {
         } else if (action === 'export') {
           try {
             const data = await characterApi.export(id);
-            downloadFile(JSON.stringify(data, null, 2), `${char.name || 'character'}.json`);
-            showSuccess('已导出');
+            const choice = await showModal({
+              title: '导出角色卡',
+              content: '<p style="margin:0;font-size:14px;">选择导出格式：</p>',
+              actions: [
+                { text: '取消', value: 'cancel', type: 'text' },
+                { text: 'JSON', value: 'json', type: 'outlined' },
+                { text: 'PNG', value: 'png', type: 'filled' },
+              ],
+            });
+            if (choice === 'json') {
+              downloadFile(JSON.stringify(data, null, 2), `${char.name || 'character'}.json`);
+              showSuccess('已导出 JSON');
+            } else if (choice === 'png') {
+              await exportCharacterPng(char, data);
+              showSuccess('已导出 PNG');
+            }
           } catch (err) {
             showError(err.message || '导出失败');
           }
@@ -150,6 +181,7 @@ function renderGrid(container) {
           if (!ok) return;
           try {
             await characterApi.delete(id);
+            if (char.avatar) fileApi.deleteFile(char.avatar).catch(() => {});
             showSuccess('已删除');
             await loadList(container);
           } catch (err) {
@@ -172,7 +204,18 @@ async function showCharacterForm(character = null) {
       </div>
 
       <div class="form-group">
-        <mdui-text-field id="char-avatar" label="头像 URL（可选）" variant="outlined" value="${escapeHtml(c.avatar || '')}" placeholder="https://..."></mdui-text-field>
+        <label class="form-group__label">头像</label>
+        <div class="avatar-upload" id="char-avatar-upload">
+          <div class="avatar-upload__preview" id="char-avatar-preview">
+            ${c.avatar ? `<img src="${c.avatar}" alt="" />` : '<span class="avatar-upload__placeholder">点击上传</span>'}
+          </div>
+          <div class="avatar-upload__actions">
+            <mdui-button variant="tonal" id="char-avatar-btn">选择图片</mdui-button>
+            ${c.avatar ? '<mdui-button variant="text" id="char-avatar-clear">清除</mdui-button>' : ''}
+          </div>
+          <input type="file" id="char-avatar-input" accept="image/*" hidden />
+          <input type="hidden" id="char-avatar" value="${escapeHtml(c.avatar || '')}" />
+        </div>
       </div>
 
       <div class="form-group">
@@ -242,6 +285,45 @@ async function showCharacterForm(character = null) {
       { text: isEdit ? '保存' : '创建', value: 'save', type: 'filled' },
     ],
     onMount: (dialog, close) => {
+      // 头像上传
+      const avatarInput = dialog.querySelector('#char-avatar-input');
+      const avatarPreview = dialog.querySelector('#char-avatar-preview');
+      const avatarHidden = dialog.querySelector('#char-avatar');
+      dialog.querySelector('#char-avatar-btn').addEventListener('click', () => avatarInput.click());
+      avatarPreview.addEventListener('click', () => avatarInput.click());
+      dialog.querySelector('#char-avatar-clear')?.addEventListener('click', () => {
+        if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+        avatarHidden.value = '';
+        avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+        dialog.querySelector('#char-avatar-clear')?.remove();
+      });
+      avatarInput.addEventListener('change', async () => {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        try {
+          if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+          const result = await fileApi.uploadCharacterImage(file);
+          avatarHidden.value = result.url;
+          avatarPreview.innerHTML = `<img src="${result.url}" alt="" />`;
+          if (!dialog.querySelector('#char-avatar-clear')) {
+            const clearBtn = document.createElement('mdui-button');
+            clearBtn.variant = 'text';
+            clearBtn.id = 'char-avatar-clear';
+            clearBtn.textContent = '清除';
+            clearBtn.addEventListener('click', () => {
+              if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+              avatarHidden.value = '';
+              avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+              clearBtn.remove();
+            });
+            dialog.querySelector('.avatar-upload__actions').appendChild(clearBtn);
+          }
+        } catch (err) {
+          showError(err.message || '上传失败');
+        }
+        avatarInput.value = '';
+      });
+
       // 备选开场白：添加/删除
       const greetingsContainer = dialog.querySelector('#char-alternate-greetings');
       dialog.querySelector('#char-add-greeting-btn').addEventListener('click', () => {
@@ -472,6 +554,57 @@ function rebindConvItems(dialog, characterId, close) {
         showError(err.message || '删除失败');
       }
     });
+  });
+}
+
+// ============ 导出 PNG ============
+async function exportCharacterPng(character, exportData) {
+  let pngBuffer;
+  if (character.avatar) {
+    try {
+      const resp = await fetch(character.avatar);
+      if (!resp.ok) throw new Error('fetch failed');
+      const blob = await resp.blob();
+      if (blob.type === 'image/png') {
+        pngBuffer = await blob.arrayBuffer();
+      } else {
+        pngBuffer = await convertImageToPng(character.avatar);
+      }
+    } catch {
+      pngBuffer = await createPlaceholderPng(400, 400, '#6750A4');
+    }
+  } else {
+    pngBuffer = await createPlaceholderPng(400, 400, '#6750A4');
+  }
+  const jsonStr = JSON.stringify(exportData);
+  const b64 = encodeBase64(jsonStr);
+  const resultBuffer = insertTextChunk(pngBuffer, 'chara', b64);
+  const blob = new Blob([resultBuffer], { type: 'image/png' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${character.name || 'character'}.png`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function convertImageToPng(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(async (blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        resolve(await blob.arrayBuffer());
+      }, 'image/png');
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = src;
   });
 }
 

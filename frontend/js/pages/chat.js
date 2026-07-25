@@ -16,6 +16,7 @@ import storage from '../utils/storage.js';
 import controlPanel from '../controlPanel/index.js';
 import { renderResponseConfig, getCurrentPrompts, applyActivePresetRegex } from '../controlPanel/responseConfig.js';
 import * as userSettingsModule from '../controlPanel/userSettings.js';
+import { getActivePersona } from '../controlPanel/personas.js';
 
 // ============ 全局状态 ============
 let currentAbortController = null;
@@ -565,8 +566,9 @@ function renderMessageHtml(msg, user, character, floorNumber) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
   const roleClass = isUser ? 'message--user' : isSystem ? 'message--system' : 'message--assistant';
+  const persona = isUser ? getActivePersona() : null;
   const avatarContent = isUser
-    ? (user?.avatar ? `<img src="${user.avatar}" alt="" />` : escapeHtml(user?.username?.charAt(0).toUpperCase() || 'U'))
+    ? (persona?.avatar ? `<img src="${persona.avatar}" alt="" />` : user?.avatar ? `<img src="${user.avatar}" alt="" />` : escapeHtml(user?.username?.charAt(0).toUpperCase() || 'U'))
     : (character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI'));
 
   // 应用用户设置：压缩空行 / 修剪末尾空白
@@ -1719,7 +1721,7 @@ async function aiHelpReply(conv, lastAssistantMsg) {
         if (err.name === 'AbortError') return;
         showError(err.message || 'AI 帮答失败');
       },
-    }, currentAbortController.signal);
+    }, currentAbortController.signal, { aiHelpPrompt: userSettingsModule.getSettings().aiHelpPrompt || undefined });
   } catch (err) {
     if (err.name !== 'AbortError') {
       showError(err.message || 'AI 帮答失败');

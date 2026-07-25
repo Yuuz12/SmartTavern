@@ -139,13 +139,15 @@ function renderContent(container) {
         </div>
         <mdui-switch id="memory-enabled" ${m.enabled ? 'checked' : ''}></mdui-switch>
       </div>
-      <div class="cp-field">
-        <label class="cp-field__label">总结用 LLM</label>
-        <mdui-select id="memory-llm-select" variant="outlined" value="${escapeHtml(m.llmConfigId || '')}">
-          <mdui-menu-item value="">跟随对话 LLM</mdui-menu-item>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">总结用 LLM</div>
+          <div class="cp-switch-row__desc">选择用于生成总结的 LLM</div>
+        </div>
+        <mdui-select id="memory-llm-select" variant="outlined" value="${m.llmConfigId || '__default__'}">
+          <mdui-menu-item value="__default__">跟随对话</mdui-menu-item>
           ${(appState.get('llmConfigs') || []).map((c) => `<mdui-menu-item value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.id)}</mdui-menu-item>`).join('')}
         </mdui-select>
-        <div class="cp-field__desc" style="margin-top:4px;">选择用于生成总结的 LLM</div>
       </div>
       <div class="cp-field">
         <div class="cp-field__label">
@@ -219,7 +221,7 @@ function bindSettingEvents(container) {
   // 总结用 LLM 选择
   const llmSelect = container.querySelector('#memory-llm-select');
   llmSelect?.addEventListener('change', () => {
-    currentMemory.llmConfigId = llmSelect.value || undefined;
+    currentMemory.llmConfigId = llmSelect.value === '__default__' ? undefined : llmSelect.value;
     saveSettings(currentMemory);
   });
 

@@ -180,8 +180,8 @@ export function put(url, body) {
 /**
  * DELETE 请求
  */
-export function del(url) {
-  return request(url, { method: 'DELETE' });
+export function del(url, body) {
+  return request(url, { method: 'DELETE', ...(body ? { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : {}) });
 }
 
 /**

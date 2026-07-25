@@ -4,12 +4,13 @@
 import { userState } from '../stores/userState.js';
 import { themeState } from '../stores/themeState.js';
 import appState from '../stores/appState.js';
-import { characterApi, worldbookApi } from '../api/index.js';
+import { characterApi, worldbookApi, fileApi } from '../api/index.js';
 import { showToast, showSuccess, showError } from '../components/Toast.js';
 import { showModal, confirm } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { initMduiTheme } from '../utils/mduiTheme.js';
 import { escapeHtml, truncate, formatRelativeTime, readFileAsJson, downloadFile, debounce } from '../utils/helpers.js';
+import { insertTextChunk, extractTextChunk, createPlaceholderPng, encodeBase64, decodeBase64, isValidPng } from '../utils/pngMeta.js';
 
 let searchKeyword = '';
 let allCharacters = [];
@@ -139,8 +140,23 @@ async function handleAction(action, id) {
     case 'export':
       try {
         const data = await characterApi.export(id);
-        downloadFile(JSON.stringify(data, null, 2), `character-${character.name}.json`);
-        showSuccess('已导出');
+        // 提供 JSON 和 PNG 两种导出方式
+        const choice = await showModal({
+          title: '导出角色卡',
+          content: '<p style="margin:0;font-size:14px;">选择导出格式：</p>',
+          actions: [
+            { text: '取消', value: 'cancel', type: 'text' },
+            { text: 'JSON', value: 'json', type: 'outlined' },
+            { text: 'PNG', value: 'png', type: 'filled' },
+          ],
+        });
+        if (choice === 'json') {
+          downloadFile(JSON.stringify(data, null, 2), `character-${character.name}.json`);
+          showSuccess('已导出 JSON');
+        } else if (choice === 'png') {
+          await exportCharacterPng(character, data);
+          showSuccess('已导出 PNG');
+        }
       } catch (err) {
         showError(err.message || '导出失败');
       }
@@ -150,6 +166,7 @@ async function handleAction(action, id) {
       if (!ok) return;
       try {
         await characterApi.delete(id);
+        if (character.avatar) fileApi.deleteFile(character.avatar).catch(() => {});
         showSuccess('已删除');
         await loadCharacters();
       } catch (err) {
@@ -178,8 +195,18 @@ async function showCharacterForm(character = null) {
       </div>
 
       <div class="form-group">
-        <label class="form-group__label">头像 URL</label>
-        <mdui-text-field id="char-avatar" variant="outlined" value="${escapeHtml(c.avatar || '')}" placeholder="https://..."></mdui-text-field>
+        <label class="form-group__label">头像</label>
+        <div class="avatar-upload" id="char-avatar-upload">
+          <div class="avatar-upload__preview" id="char-avatar-preview">
+            ${c.avatar ? `<img src="${c.avatar}" alt="" />` : '<span class="avatar-upload__placeholder">点击上传</span>'}
+          </div>
+          <div class="avatar-upload__actions">
+            <mdui-button variant="tonal" id="char-avatar-btn">选择图片</mdui-button>
+            ${c.avatar ? '<mdui-button variant="text" id="char-avatar-clear">清除</mdui-button>' : ''}
+          </div>
+          <input type="file" id="char-avatar-input" accept="image/*" hidden />
+          <input type="hidden" id="char-avatar" value="${escapeHtml(c.avatar || '')}" />
+        </div>
       </div>
 
       <div class="form-group">
@@ -312,6 +339,45 @@ async function showCharacterForm(character = null) {
       bindTagInput(tagInput);
       renderTags();
 
+      // 头像上传
+      const avatarInput = dialog.querySelector('#char-avatar-input');
+      const avatarPreview = dialog.querySelector('#char-avatar-preview');
+      const avatarHidden = dialog.querySelector('#char-avatar');
+      dialog.querySelector('#char-avatar-btn').addEventListener('click', () => avatarInput.click());
+      avatarPreview.addEventListener('click', () => avatarInput.click());
+      dialog.querySelector('#char-avatar-clear')?.addEventListener('click', () => {
+        if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+        avatarHidden.value = '';
+        avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+        dialog.querySelector('#char-avatar-clear')?.remove();
+      });
+      avatarInput.addEventListener('change', async () => {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        try {
+          if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+          const result = await fileApi.uploadCharacterImage(file);
+          avatarHidden.value = result.url;
+          avatarPreview.innerHTML = `<img src="${result.url}" alt="" />`;
+          if (!dialog.querySelector('#char-avatar-clear')) {
+            const clearBtn = document.createElement('mdui-button');
+            clearBtn.variant = 'text';
+            clearBtn.id = 'char-avatar-clear';
+            clearBtn.textContent = '清除';
+            clearBtn.addEventListener('click', () => {
+              if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+              avatarHidden.value = '';
+              avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+              clearBtn.remove();
+            });
+            dialog.querySelector('.avatar-upload__actions').appendChild(clearBtn);
+          }
+        } catch (err) {
+          showError(err.message || '上传失败');
+        }
+        avatarInput.value = '';
+      });
+
       // 备选开场白：添加/删除
       const greetingsContainer = dialog.querySelector('#char-alternate-greetings');
       dialog.querySelector('#char-add-greeting-btn').addEventListener('click', () => {
@@ -378,12 +444,96 @@ async function showCharacterForm(character = null) {
   });
 }
 
+// ============ 导出 PNG ============
+async function exportCharacterPng(character, exportData) {
+  let pngBuffer;
+
+  if (character.avatar) {
+    // 获取头像图片
+    try {
+      const resp = await fetch(character.avatar);
+      if (!resp.ok) throw new Error('fetch failed');
+      const blob = await resp.blob();
+      if (blob.type === 'image/png') {
+        pngBuffer = await blob.arrayBuffer();
+      } else {
+        // 非 PNG 格式，通过 Canvas 转换
+        pngBuffer = await convertImageToPng(character.avatar);
+      }
+    } catch {
+      pngBuffer = await createPlaceholderPng(400, 400, '#6750A4');
+    }
+  } else {
+    pngBuffer = await createPlaceholderPng(400, 400, '#6750A4');
+  }
+
+  // 将角色数据嵌入 PNG
+  const jsonStr = JSON.stringify(exportData);
+  const b64 = encodeBase64(jsonStr);
+  const resultBuffer = insertTextChunk(pngBuffer, 'chara', b64);
+
+  // 下载
+  const blob = new Blob([resultBuffer], { type: 'image/png' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${character.name}.png`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function convertImageToPng(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(async (blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        resolve(await blob.arrayBuffer());
+      }, 'image/png');
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = src;
+  });
+}
+
 // ============ 导入角色卡 ============
 async function handleImport(file) {
   try {
-    const data = await readFileAsJson(file);
-    await characterApi.import(data);
-    showSuccess('角色卡导入成功');
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'png') {
+      // PNG 导入：提取嵌入的角色数据
+      const buffer = await file.arrayBuffer();
+      if (!isValidPng(buffer)) {
+        showError('无效的 PNG 文件');
+        return;
+      }
+      const charaData = extractTextChunk(buffer, 'chara');
+      if (!charaData) {
+        showError('该 PNG 中未找到角色卡数据');
+        return;
+      }
+      const data = JSON.parse(decodeBase64(charaData));
+      // 上传 PNG 作为头像
+      try {
+        const result = await fileApi.uploadCharacterImage(file);
+        if (data.data) data.data.avatar = result.url;
+        else data.avatar = result.url;
+      } catch { /* 头像上传失败不影响导入 */ }
+      await characterApi.import(data);
+      showSuccess('角色卡导入成功（PNG）');
+    } else {
+      // JSON 导入
+      const data = await readFileAsJson(file);
+      await characterApi.import(data);
+      showSuccess('角色卡导入成功');
+    }
     await loadCharacters();
   } catch (err) {
     showError(err.message || '导入失败，请检查文件格式');

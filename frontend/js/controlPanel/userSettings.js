@@ -47,6 +47,7 @@ const DEFAULT_SETTINGS = {
   showThinking: true,
   renderEnabled: true,
   collapseCodeBlock: 'frontend_only',
+  aiHelpPrompt: '',
   customCss: '',
 };
 
@@ -254,6 +255,13 @@ export function renderUserSettings(container, opts = {}) {
         </div>
         <mdui-switch id="confirm-delete" ${settings.confirmMessageDelete ? 'checked' : ''}></mdui-switch>
       </div>
+      <div class="cp-switch-row">
+        <div>
+          <div class="cp-switch-row__label">AI 帮答提示词</div>
+          <div class="cp-switch-row__desc">自定义帮答系统提示词，留空使用默认</div>
+        </div>
+        <mdui-button id="edit-ai-help-prompt" variant="outlined">编辑</mdui-button>
+      </div>
     </div>
 
     <div class="cp-section">
@@ -372,6 +380,32 @@ function bindEvents(container) {
   const customCssEl = container.querySelector('#custom-css');
   customCssEl?.addEventListener('input', () => {
     updateSettings({ customCss: customCssEl.value });
+  });
+
+  // AI 帮答提示词
+  container.querySelector('#edit-ai-help-prompt')?.addEventListener('click', async () => {
+    const { showModal } = await import('../components/Modal.js');
+    const current = getSettings().aiHelpPrompt || '';
+    const result = await showModal({
+      title: 'AI 帮答提示词',
+      content: `
+        <p style="margin: 0 0 8px; font-size: 12px; color: rgb(var(--mdui-color-on-surface-variant));">留空则使用内置默认提示词</p>
+        <mdui-text-field id="ai-help-prompt-input" variant="outlined" rows="6" placeholder="留空使用默认" value="${escapeHtml(current)}" style="width: 100%;"></mdui-text-field>
+      `,
+      actions: [
+        { text: '取消', value: 'cancel', type: 'text' },
+        { text: '保存', value: 'ok', type: 'filled' },
+      ],
+      onMount: (dialog, close) => {
+        const input = dialog.querySelector('#ai-help-prompt-input');
+        dialog.querySelector('[data-action="ok"]').addEventListener('click', () => {
+          close(input.value);
+        });
+      },
+    });
+    if (result !== null && result !== 'cancel') {
+      updateSettings({ aiHelpPrompt: result });
+    }
   });
 
   // 恢复默认

@@ -17,6 +17,7 @@ import worldbookRoutes from './modules/worldbook/worldbook.routes.js';
 import conversationRoutes from './modules/conversation/conversation.routes.js';
 import llmConfigRoutes from './modules/llm-config/llmConfig.routes.js';
 import systemRoutes from './modules/system/system.routes.js';
+import fileRoutes from './modules/file/file.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,13 +43,20 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ============ 静态文件（上传的文件） ============
-app.use('/uploads', express.static(storageConfig.uploadPath, {
-  maxAge: '7d',
-  setHeaders: (res) => {
-    res.setHeader('Access-Control-Allow-Origin', appConfig.corsOrigin);
-  },
-}));
+// ============ 静态文件（用户上传，按用户隔离） ============
+app.use('/uploads/:userId', (req, res, next) => {
+  const { userId } = req.params;
+  // 路径穿越防护
+  if (/[\/\\]|\.\./.test(userId)) {
+    res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: '非法路径' } });
+    return;
+  }
+  const userUploadDir = path.join(storageConfig.dataPath, 'users', userId, 'uploads');
+  express.static(userUploadDir, {
+    maxAge: '7d',
+    fallthrough: true,
+  })(req, res, next);
+});
 
 // ============ API 路由 ============
 app.use('/api/auth', authRoutes);
@@ -58,6 +66,7 @@ app.use('/api/worldbooks', worldbookRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/llm-configs', llmConfigRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/files', fileRoutes);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {

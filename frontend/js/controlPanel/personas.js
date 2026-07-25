@@ -8,6 +8,7 @@ import { showModal, confirm } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { escapeHtml, generateId } from '../utils/helpers.js';
 import storage from '../utils/storage.js';
+import { fileApi } from '../api/index.js';
 
 const PERSONAS_KEY = 'cp_personas';
 const DEFAULT_PERSONA_KEY = 'cp_default_persona';
@@ -187,7 +188,18 @@ function showPersonaForm(persona, callback) {
         </div>
 
         <div class="form-group">
-          <mdui-text-field id="persona-avatar" label="头像 URL（可选）" variant="outlined" value="${escapeHtml(p.avatar)}" placeholder="https://..."></mdui-text-field>
+          <label class="form-group__label">头像</label>
+          <div class="avatar-upload" id="persona-avatar-upload">
+            <div class="avatar-upload__preview" id="persona-avatar-preview">
+              ${p.avatar ? `<img src="${p.avatar}" alt="" />` : '<span class="avatar-upload__placeholder">点击上传</span>'}
+            </div>
+            <div class="avatar-upload__actions">
+              <mdui-button variant="tonal" id="persona-avatar-btn">选择图片</mdui-button>
+              ${p.avatar ? '<mdui-button variant="text" id="persona-avatar-clear">清除</mdui-button>' : ''}
+            </div>
+            <input type="file" id="persona-avatar-input" accept="image/*" hidden />
+            <input type="hidden" id="persona-avatar" value="${escapeHtml(p.avatar)}" />
+          </div>
         </div>
 
         <div class="form-group">
@@ -233,6 +245,45 @@ function showPersonaForm(persona, callback) {
       { text: isEdit ? '保存' : '创建', value: 'save', type: 'filled' },
     ],
     onMount: (dialog, close) => {
+      // 头像上传
+      const avatarInput = dialog.querySelector('#persona-avatar-input');
+      const avatarPreview = dialog.querySelector('#persona-avatar-preview');
+      const avatarHidden = dialog.querySelector('#persona-avatar');
+      dialog.querySelector('#persona-avatar-btn').addEventListener('click', () => avatarInput.click());
+      avatarPreview.addEventListener('click', () => avatarInput.click());
+      dialog.querySelector('#persona-avatar-clear')?.addEventListener('click', () => {
+        if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+        avatarHidden.value = '';
+        avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+        dialog.querySelector('#persona-avatar-clear')?.remove();
+      });
+      avatarInput.addEventListener('change', async () => {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        try {
+          if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+          const result = await fileApi.uploadAvatar(file);
+          avatarHidden.value = result.url;
+          avatarPreview.innerHTML = `<img src="${result.url}" alt="" />`;
+          if (!dialog.querySelector('#persona-avatar-clear')) {
+            const clearBtn = document.createElement('mdui-button');
+            clearBtn.variant = 'text';
+            clearBtn.id = 'persona-avatar-clear';
+            clearBtn.textContent = '清除';
+            clearBtn.addEventListener('click', () => {
+              if (avatarHidden.value) fileApi.deleteFile(avatarHidden.value).catch(() => {});
+              avatarHidden.value = '';
+              avatarPreview.innerHTML = '<span class="avatar-upload__placeholder">点击上传</span>';
+              clearBtn.remove();
+            });
+            dialog.querySelector('.avatar-upload__actions').appendChild(clearBtn);
+          }
+        } catch (err) {
+          showError(err.message || '上传失败');
+        }
+        avatarInput.value = '';
+      });
+
       dialog.querySelector('[data-action="save"]').addEventListener('click', () => {
         const name = dialog.querySelector('#persona-name').value.trim();
         if (!name) {
