@@ -19,6 +19,7 @@ backend/backups/
 # 环境变量
 .env
 .env.local
+.env.*.local
 backend/.env
 *.env.backup
 
@@ -44,12 +45,21 @@ desktop.ini
 # 测试
 coverage/
 .nyc_output/
+backend/coverage/
 
 # 临时文件
 *.tmp
 *.bak
 *.temp
 *.cache
+*.pid
+*.pid.lock
+
+# 敏感文件（防止误提交密钥/证书）
+*.pem
+*.key
+*.crt
+*.p12
 
 # 发布打包产物
 release/
@@ -62,3 +72,6 @@ release/
 # 可能的本地开发配置
 .local/
 local/
+
+# ESLint 缓存
+.eslintcache
