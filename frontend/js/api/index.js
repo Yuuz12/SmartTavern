@@ -1,7 +1,7 @@
 /**
  * API 接口封装
  */
-import { get, post, put, del, postStream, upload } from '../utils/request.js';
+import { get, post, put, del, postStream, upload, getAccessToken } from '../utils/request.js';
 
 // ============ 认证 ============
 export const authApi = {
@@ -74,6 +74,15 @@ export const conversationApi = {
   create: (data) => post('/conversations', data),
   update: (id, data) => put(`/conversations/${id}`, data),
   delete: (id) => del(`/conversations/${id}`),
+  export: async (id, format = 'json') => {
+    const token = getAccessToken();
+    const response = await fetch(`/api/conversations/${id}/export?format=${format}`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error(`导出失败: HTTP ${response.status}`);
+    return response;
+  },
+  import: (characterId, data, llmConfigId, title) => post('/conversations/import', { characterId, data, llmConfigId, title }),
   sendMessage: (id, content, callbacks, signal, extraBody) => postStream(`/conversations/${id}/messages`, { content, ...extraBody }, callbacks, signal),
   regenerate: (id, callbacks, signal, extraBody) => postStream(`/conversations/${id}/regenerate`, { ...extraBody }, callbacks, signal),
   continue: (id, callbacks, signal, extraBody) => postStream(`/conversations/${id}/continue`, { ...extraBody }, callbacks, signal),

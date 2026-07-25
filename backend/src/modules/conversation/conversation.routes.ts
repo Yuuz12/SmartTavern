@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { userService, characterService, worldbookService, conversationService } from '../../storage/index.js';
 import { llmService } from '../llm/index.js';
 import { asyncHandler, ApiError, authRequired } from '../../middleware/index.js';
-import { ERROR_CODES, logger, applyRegexScripts, type LLMConfig, type Message, type MessageRole, type ConversationPrompt, type MemorySettings, type MemorySummary } from '../../shared/index.js';
+import { ERROR_CODES, logger, applyRegexScripts, generateShortId, type LLMConfig, type Conversation, type Message, type MessageRole, type ConversationPrompt, type MemorySettings, type MemorySummary } from '../../shared/index.js';
 import {
   DEFAULT_MEMORY_SETTINGS,
   getMemorySettings,
@@ -30,6 +30,261 @@ router.get(
     const characterId = req.query.characterId as string | undefined;
     const list = await conversationService.getByUserId(req.user.userId, search, characterId);
     res.json({ success: true, data: list });
+  }),
+);
+
+// ============ 对话导入导出（SillyTavern 兼容） ============
+
+/** ISO 时间 -> SillyTavern send_date（人类可读英文） */
+function toSillyTavernSendDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+  } catch {
+    return new Date().toLocaleString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+  }
+}
+
+/** ISO 时间 -> SillyTavern create_date（YYYY-MM-DD@HHhMMmSSs） */
+function toSillyTavernCreateDate(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}@${pad(d.getHours())}h${pad(d.getMinutes())}m${pad(d.getSeconds())}s`;
+}
+
+/** SillyTavern 日期（多种格式）-> ISO */
+function parseSillyTavernDate(s: string): string {
+  if (!s) return new Date().toISOString();
+  const ts = Number(s);
+  if (!isNaN(ts) && s.length >= 10) return new Date(ts).toISOString();
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString();
+  return new Date().toISOString();
+}
+
+/** SmartTavern 消息 -> SillyTavern 消息对象 */
+function buildSillyTavernMessage(msg: Message, characterName: string): Record<string, unknown> {
+  const isUser = msg.role === 'user';
+  const isSystem = msg.role === 'system';
+  const extra: Record<string, unknown> = {};
+  if (msg.metadata?.model) extra.model = msg.metadata.model;
+  if (msg.metadata?.thinking) extra.reasoning = msg.metadata.thinking;
+  if (msg.metadata?.tokens != null) extra.token_count = msg.metadata.tokens;
+
+  const entry: Record<string, unknown> = {
+    name: isUser ? 'User' : characterName,
+    is_user: isUser,
+    is_system: isSystem,
+    send_date: toSillyTavernSendDate(msg.timestamp),
+    mes: msg.content,
+    extra,
+  };
+
+  if (msg.swipes && msg.swipes.length > 0) {
+    entry.swipes = msg.swipes;
+    entry.swipe_id = msg.swipeIndex ?? 0;
+    if (msg.swipeThinkings && msg.swipeThinkings.length > 0) {
+      entry.swipe_info = msg.swipes.map((_, i) => ({
+        send_date: entry.send_date,
+        extra: {
+          model: msg.metadata?.model,
+          reasoning: msg.swipeThinkings?.[i] || '',
+        },
+      }));
+    }
+  }
+  return entry;
+}
+
+/** SmartTavern 对话 -> SillyTavern JSONL 字符串（首行头部，后续每行一条消息） */
+function exportToSillyTavernJsonl(conv: Conversation, characterName: string): string {
+  const header = {
+    user_name: 'User',
+    character_name: characterName,
+    create_date: toSillyTavernCreateDate(conv.createdAt),
+    chat_metadata: {},
+  };
+  const lines = [JSON.stringify(header)];
+  for (const msg of conv.messages) {
+    lines.push(JSON.stringify(buildSillyTavernMessage(msg, characterName)));
+  }
+  return lines.join('\n');
+}
+
+/** SmartTavern 对话 -> 纯文本 */
+function exportToText(conv: Conversation, characterName: string): string {
+  const lines: string[] = [];
+  for (const msg of conv.messages) {
+    const speaker = msg.role === 'user' ? 'User' : characterName;
+    lines.push(`${speaker}:`);
+    lines.push(msg.content);
+    lines.push('');
+  }
+  return lines.join('\n').replace(/\n+$/, '\n');
+}
+
+/** 解析 SillyTavern 输入（支持 JSON 对象、JSON 数组、JSONL 字符串） */
+function parseSillyTavernInput(raw: unknown): { characterName?: string; chat: Record<string, unknown>[] } {
+  // 字符串：可能是单个 JSON 或 JSONL
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return { chat: [] };
+    // 先尝试作为单个 JSON 解析
+    try {
+      return parseSillyTavernInput(JSON.parse(trimmed));
+    } catch {
+      // JSONL：逐行解析，首行是头部（含 chat_metadata/character_name），后续行是消息
+      const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean);
+      let characterName: string | undefined;
+      const chat: Record<string, unknown>[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        let obj: unknown;
+        try {
+          obj = JSON.parse(lines[i]);
+        } catch {
+          continue; // 忽略解析失败的行
+        }
+        if (i === 0 && obj && typeof obj === 'object' && !Array.isArray(obj)
+          && ('chat_metadata' in obj || 'user_name' in obj || 'character_name' in obj || 'create_date' in obj)) {
+          // 头部行：提取角色名
+          characterName = (obj as Record<string, unknown>).character_name as string | undefined;
+        } else if (obj && typeof obj === 'object') {
+          chat.push(obj as Record<string, unknown>);
+        }
+      }
+      return { characterName, chat };
+    }
+  }
+  // 数组：纯消息数组
+  if (Array.isArray(raw)) {
+    return { chat: raw as Record<string, unknown>[] };
+  }
+  // 对象：带 chat 数组
+  if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const chat = Array.isArray(obj.chat) ? (obj.chat as Record<string, unknown>[]) : [];
+    return { characterName: obj.character_name as string | undefined, chat };
+  }
+  return { chat: [] };
+}
+
+/** SillyTavern 消息数组 -> SmartTavern 消息数组 */
+function convertSillyTavernMessages(chat: Record<string, unknown>[]): Message[] {
+  return chat.map((entry) => {
+    const role: MessageRole = entry.is_system ? 'system' : (entry.is_user ? 'user' : 'assistant');
+    const msg: Message = {
+      id: generateShortId(),
+      role,
+      content: (entry.mes as string) ?? '',
+      timestamp: parseSillyTavernDate((entry.send_date as string) || ''),
+    };
+    const extra = (entry.extra as Record<string, unknown>) || {};
+    const metadata: Record<string, unknown> = {};
+    if (extra.model) metadata.model = extra.model;
+    if (extra.reasoning) metadata.thinking = extra.reasoning;
+    if (extra.token_count != null) metadata.tokens = extra.token_count;
+    if (Object.keys(metadata).length) msg.metadata = metadata as Message['metadata'];
+    const swipes = entry.swipes as string[] | undefined;
+    if (Array.isArray(swipes) && swipes.length > 0) {
+      msg.swipes = swipes;
+      msg.swipeIndex = (entry.swipe_id as number) ?? 0;
+      msg.content = swipes[msg.swipeIndex] ?? ((entry.mes as string) ?? '');
+      const swipeInfo = entry.swipe_info as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(swipeInfo)) {
+        msg.swipeThinkings = swipeInfo.map((si) => {
+          const siExtra = (si?.extra as Record<string, unknown>) || {};
+          return (siExtra.reasoning as string) || '';
+        });
+      }
+    }
+    return msg;
+  });
+}
+
+/**
+ * GET /api/conversations/:id/export
+ * 导出对话（SillyTavern 兼容 JSON 或纯文本）
+ */
+router.get(
+  '/:id/export',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const conv = await conversationService.get(req.params.id, req.user.userId);
+    if (!conv) throw ApiError.notFound('对话不存在');
+    const character = await characterService.get(conv.characterId, req.user.userId);
+    const characterName = character?.name || 'Character';
+    const format = (req.query.format as string) || 'json';
+    const safeTitle = encodeURIComponent(conv.title || 'conversation');
+
+    if (format === 'text') {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.txt"`);
+      res.send(exportToText(conv, characterName));
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/x-jsonlines; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.jsonl"`);
+    res.send(exportToSillyTavernJsonl(conv, characterName));
+  }),
+);
+
+/**
+ * POST /api/conversations/import
+ * 导入对话（SillyTavern 兼容 JSON）
+ */
+router.post(
+  '/import',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const { characterId, llmConfigId, data, title: customTitle } = req.body as {
+      characterId?: string;
+      llmConfigId?: string;
+      data: unknown;
+      title?: string;
+    };
+    if (!characterId) throw ApiError.badRequest('角色卡 ID 不能为空');
+    if (!data) throw ApiError.badRequest('导入数据不能为空');
+
+    const character = await characterService.get(characterId, req.user.userId);
+    if (!character) throw ApiError.notFound('角色卡不存在');
+
+    // LLM 配置：传入的或用户的第一个
+    const llmConfigs = await userService.getLLMConfigs(req.user.userId);
+    let configId = llmConfigId;
+    if (configId) {
+      if (!llmConfigs.find((c) => c.id === configId)) {
+        throw ApiError.notFound('LLM 配置不存在', ERROR_CODES.LLM_CONFIG_NOT_FOUND);
+      }
+    } else {
+      if (llmConfigs.length === 0) throw ApiError.badRequest('未找到可用的 LLM 配置');
+      configId = llmConfigs[0].id;
+    }
+
+    const { characterName: importedName, chat } = parseSillyTavernInput(data);
+    const messages = convertSillyTavernMessages(chat);
+
+    const characterName = importedName || character.name;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const title = customTitle || `${characterName} - ${timeStr}`;
+
+    const conv = await conversationService.createConversation({
+      userId: req.user.userId,
+      characterId,
+      llmConfigId: configId,
+      title,
+      systemPrompt: character.systemPrompt,
+      initialMessages: messages,
+    });
+
+    res.json({ success: true, data: { id: conv.id, title: conv.title } });
   }),
 );
 

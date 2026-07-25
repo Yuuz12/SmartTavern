@@ -5,7 +5,7 @@
 import appState from '../stores/appState.js';
 import { characterApi, worldbookApi, conversationApi, fileApi } from '../api/index.js';
 import { showSuccess, showError, showInfo } from '../components/Toast.js';
-import { showModal, confirm } from '../components/Modal.js';
+import { showModal, confirm, prompt } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { escapeHtml, truncate, readFileAsJson, downloadFile, debounce, formatRelativeTime } from '../utils/helpers.js';
 import { insertTextChunk, createPlaceholderPng, encodeBase64, extractTextChunk, decodeBase64, isValidPng } from '../utils/pngMeta.js';
@@ -392,11 +392,47 @@ async function showCharacterForm(character = null) {
  * 显示某角色的对话列表 dialog
  * 点击角色卡时触发：列出该角色所有对话，可选中/删除/新建
  */
+/** 生成对话项 HTML */
+function buildConvItemHtml(conv) {
+  const lastMessage = conv.messages?.[conv.messages.length - 1];
+  const preview = lastMessage
+    ? truncate(lastMessage.content.replace(/\n/g, ' '), 40)
+    : (conv.title || '空对话');
+  const time = formatRelativeTime(conv.updatedAt || conv.createdAt);
+  return `
+    <mdui-list-item class="char-conv-item" data-id="${conv.id}" rounded headline="${escapeHtml(conv.title || '未命名对话')}" headline-line="1">
+      <span slot="description">${escapeHtml(preview)} · ${time}</span>
+      <div slot="end-icon" style="display:flex;align-items:center;gap:2px;">
+        <mdui-button-icon icon="download" data-action="export-json" data-id="${conv.id}" label="导出JSONL"></mdui-button-icon>
+        <mdui-button-icon icon="article" data-action="export-text" data-id="${conv.id}" label="导出文本"></mdui-button-icon>
+        <mdui-button-icon icon="edit" data-action="rename-conv" data-id="${conv.id}" label="重命名"></mdui-button-icon>
+        <mdui-button-icon icon="delete" data-action="delete-conv" data-id="${conv.id}" label="删除" style="color: var(--md-sys-color-error);"></mdui-button-icon>
+      </div>
+    </mdui-list-item>
+  `;
+}
+
+/** 导出对话并下载 */
+async function downloadConversation(id, format, title) {
+  try {
+    const response = await conversationApi.export(id, format);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'conversation'}.${format === 'text' ? 'txt' : 'jsonl'}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showSuccess('导出成功');
+  } catch (err) {
+    showError(err.message || '导出失败');
+  }
+}
+
 async function showCharacterConversationsDialog(characterId) {
   const character = allCharacters.find((c) => c.id === characterId);
   if (!character) return;
 
-  // 拉取该角色的对话列表
   let conversations = [];
   try {
     conversations = await conversationApi.list({ characterId });
@@ -405,39 +441,17 @@ async function showCharacterConversationsDialog(characterId) {
     return;
   }
 
-  const listHtml = conversations.length === 0
-    ? `<div class="empty-state" style="padding: 24px;"><p class="empty-state__description">该角色还没有对话，点击下方按钮创建</p></div>`
-    : conversations.map((conv) => {
-        const lastMessage = conv.messages?.[conv.messages.length - 1];
-        const preview = lastMessage
-          ? truncate(lastMessage.content.replace(/\n/g, ' '), 40)
-          : (conv.title || '空对话');
-        const time = formatRelativeTime(conv.updatedAt || conv.createdAt);
-        return `
-          <mdui-list-item
-            class="char-conv-item"
-            data-id="${conv.id}"
-            rounded
-            headline="${escapeHtml(conv.title || '未命名对话')}"
-            headline-line="1"
-          >
-            <span slot="description">${escapeHtml(preview)} · ${time}</span>
-            <mdui-button-icon
-              slot="end-icon"
-              icon="delete"
-              data-action="delete-conv"
-              data-id="${conv.id}"
-              label="删除对话"
-              style="color: var(--md-sys-color-error);"
-            ></mdui-button-icon>
-          </mdui-list-item>
-        `;
-      }).join('');
+  const renderList = (list) => list.length === 0
+    ? `<div class="empty-state" style="padding: 24px;"><p class="empty-state__description">该角色还没有对话</p></div>`
+    : list.map(buildConvItemHtml).join('');
 
   const content = `
     <div style="display: flex; flex-direction: column; gap: 12px;">
-      <mdui-button variant="filled" id="char-conv-new" icon="add" full-width>新建对话</mdui-button>
-      <mdui-list>${listHtml}</mdui-list>
+      <div style="display:flex;gap:8px;">
+        <mdui-button variant="filled" id="char-conv-new" icon="add" style="flex:1;">新建对话</mdui-button>
+        <mdui-button variant="outlined" id="char-conv-import" icon="upload">导入对话</mdui-button>
+      </div>
+      <mdui-list id="char-conv-list">${renderList(conversations)}</mdui-list>
     </div>
   `;
 
@@ -446,114 +460,110 @@ async function showCharacterConversationsDialog(characterId) {
     content,
     actions: [{ text: '关闭', value: 'close', type: 'text' }],
     onMount: (dialog, close) => {
-      // 新建对话：动态 import chat.js 复用创建流程，预选该角色
+      const refreshList = async () => {
+        const refreshed = await conversationApi.list({ characterId });
+        conversations = refreshed;
+        const listEl = dialog.querySelector('#char-conv-list');
+        if (listEl) {
+          listEl.innerHTML = renderList(refreshed);
+          bindConvEvents();
+        }
+      };
+
+      const bindConvEvents = () => {
+        // 选中对话
+        dialog.querySelectorAll('.char-conv-item').forEach((item) => {
+          item.addEventListener('click', async (e) => {
+            if (e.target.closest('[data-action]')) return;
+            const id = item.dataset.id;
+            close('selected');
+            const chatModule = await import('../pages/chat.js');
+            await chatModule.selectConversation(id);
+          });
+        });
+        // 导出 JSON
+        dialog.querySelectorAll('[data-action="export-json"]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const conv = conversations.find((c) => c.id === id);
+            await downloadConversation(id, 'json', conv?.title);
+          });
+        });
+        // 导出文本
+        dialog.querySelectorAll('[data-action="export-text"]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const conv = conversations.find((c) => c.id === id);
+            await downloadConversation(id, 'text', conv?.title);
+          });
+        });
+        // 删除对话
+        dialog.querySelectorAll('[data-action="delete-conv"]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const ok = await confirm('确定要删除这个对话吗？此操作不可恢复。', '删除对话');
+            if (!ok) return;
+            try {
+              await conversationApi.delete(id);
+              showSuccess('对话已删除');
+              await refreshList();
+            } catch (err) {
+              showError(err.message || '删除失败');
+            }
+          });
+        });
+        // 重命名对话
+        dialog.querySelectorAll('[data-action="rename-conv"]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const conv = conversations.find((c) => c.id === id);
+            const newTitle = await prompt('请输入新的对话标题', conv?.title || '', '重命名对话');
+            if (newTitle === null) return;
+            try {
+              await conversationApi.update(id, { title: newTitle });
+              showSuccess('重命名成功');
+              await refreshList();
+            } catch (err) {
+              showError(err.message || '重命名失败');
+            }
+          });
+        });
+      };
+
+      // 新建对话
       dialog.querySelector('#char-conv-new')?.addEventListener('click', async () => {
         close('new');
         const chatModule = await import('../pages/chat.js');
         chatModule.showCreateConversationModal(characterId);
       });
 
-      // 选中对话
-      dialog.querySelectorAll('.char-conv-item').forEach((item) => {
-        item.addEventListener('click', async (e) => {
-          if (e.target.closest('[data-action="delete-conv"]')) return;
-          const id = item.dataset.id;
-          close('selected');
-          const chatModule = await import('../pages/chat.js');
-          await chatModule.selectConversation(id);
-        });
-      });
-
-      // 删除对话
-      dialog.querySelectorAll('[data-action="delete-conv"]').forEach((btn) => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.id;
-          const ok = await confirm('确定要删除这个对话吗？此操作不可恢复。', '删除对话');
-          if (!ok) return;
+      // 导入对话
+      dialog.querySelector('#char-conv-import')?.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,.jsonl,application/json';
+        input.onchange = async () => {
+          const file = input.files[0];
+          if (!file) return;
           try {
-            await conversationApi.delete(id);
-            showSuccess('对话已删除');
-            // 刷新 dialog 内列表
-            const refreshed = await conversationApi.list({ characterId });
-            conversations = refreshed;
-            const listEl = dialog.querySelector('mdui-list');
-            if (listEl) {
-              if (refreshed.length === 0) {
-                listEl.innerHTML = `<div class="empty-state" style="padding: 24px;"><p class="empty-state__description">该角色还没有对话，点击上方按钮创建</p></div>`;
-              } else {
-                listEl.innerHTML = refreshed.map((conv) => {
-                  const lastMessage = conv.messages?.[conv.messages.length - 1];
-                  const preview = lastMessage
-                    ? truncate(lastMessage.content.replace(/\n/g, ' '), 40)
-                    : (conv.title || '空对话');
-                  const time = formatRelativeTime(conv.updatedAt || conv.createdAt);
-                  return `
-                    <mdui-list-item class="char-conv-item" data-id="${conv.id}" rounded headline="${escapeHtml(conv.title || '未命名对话')}" headline-line="1">
-                      <span slot="description">${escapeHtml(preview)} · ${time}</span>
-                      <mdui-button-icon slot="end-icon" icon="delete" data-action="delete-conv" data-id="${conv.id}" label="删除对话" style="color: var(--md-sys-color-error);"></mdui-button-icon>
-                    </mdui-list-item>
-                  `;
-                }).join('');
-                // 重新绑定（showModal 的 onMount 只执行一次，这里手动绑新元素）
-                rebindConvItems(dialog, characterId, close);
-              }
-            }
+            const text = await file.text();
+            const fileName = file.name.replace(/\.(jsonl?|txt)$/i, '');
+            await conversationApi.import(characterId, text, undefined, fileName || undefined);
+            showSuccess('对话导入成功');
+            await refreshList();
           } catch (err) {
-            showError(err.message || '删除失败');
+            showError(err.message || '导入失败');
           }
-        });
+        };
+        input.click();
       });
-    },
-  });
-}
 
-// 删除后重新绑定对话项事件（避免闭包内重复定义）
-function rebindConvItems(dialog, characterId, close) {
-  dialog.querySelectorAll('.char-conv-item').forEach((item) => {
-    item.addEventListener('click', async (e) => {
-      if (e.target.closest('[data-action="delete-conv"]')) return;
-      const id = item.dataset.id;
-      close('selected');
-      const chatModule = await import('../pages/chat.js');
-      await chatModule.selectConversation(id);
-    });
-  });
-  dialog.querySelectorAll('[data-action="delete-conv"]').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const ok = await confirm('确定要删除这个对话吗？此操作不可恢复。', '删除对话');
-      if (!ok) return;
-      try {
-        await conversationApi.delete(id);
-        showSuccess('对话已删除');
-        const refreshed = await conversationApi.list({ characterId });
-        const listEl = dialog.querySelector('mdui-list');
-        if (listEl) {
-          if (refreshed.length === 0) {
-            listEl.innerHTML = `<div class="empty-state" style="padding: 24px;"><p class="empty-state__description">该角色还没有对话，点击上方按钮创建</p></div>`;
-          } else {
-            listEl.innerHTML = refreshed.map((conv) => {
-              const lastMessage = conv.messages?.[conv.messages.length - 1];
-              const preview = lastMessage
-                ? truncate(lastMessage.content.replace(/\n/g, ' '), 40)
-                : (conv.title || '空对话');
-              const time = formatRelativeTime(conv.updatedAt || conv.createdAt);
-              return `
-                <mdui-list-item class="char-conv-item" data-id="${conv.id}" rounded headline="${escapeHtml(conv.title || '未命名对话')}" headline-line="1">
-                  <span slot="description">${escapeHtml(preview)} · ${time}</span>
-                  <mdui-button-icon slot="end-icon" icon="delete" data-action="delete-conv" data-id="${conv.id}" label="删除对话" style="color: var(--md-sys-color-error);"></mdui-button-icon>
-                </mdui-list-item>
-              `;
-            }).join('');
-            rebindConvItems(dialog, characterId, close);
-          }
-        }
-      } catch (err) {
-        showError(err.message || '删除失败');
-      }
-    });
+      bindConvEvents();
+    },
   });
 }
 

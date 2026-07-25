@@ -130,9 +130,9 @@ export function prompt(message, defaultValue = '', title = '输入') {
           close(input.value);
         }
       });
-      dialog.querySelector('[data-action="ok"]').addEventListener('click', () => {
-        close(input.value);
-      });
+      // 用 capture 阶段绑定，确保先于 showModal 的通用 data-action 绑定触发
+      dialog.querySelector('[data-action="ok"]').addEventListener('click', () => close(input.value), true);
+      dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => close(null), true);
     },
   });
 }
