@@ -12,6 +12,7 @@ import {
   generateSummaries,
   triggerSummaryGeneration,
 } from './memory.service.js';
+import { computeCacheHit, estimatePromptTokens, getCacheStats } from '../cache/cache.service.js';
 
 const router = Router();
 
@@ -660,6 +661,7 @@ async function streamLLMResponse(
 
   // 构建系统提示词、消息列表等（SSE 已建立，错误需通过 SSE 发送）
   let messages: { role: MessageRole; content: string }[];
+  let messagesForCache: { role: MessageRole; content: string }[];
   let finalSystemPrompt: string;
   let memory: ReturnType<typeof getMemorySettings>;
   let aiMessage: { id: string };
@@ -686,6 +688,11 @@ async function streamLLMResponse(
     if (memory?.enabled && memory.maxContextFloors > 0 && messages.length > memory.maxContextFloors) {
       messages = messages.slice(-memory.maxContextFloors);
     }
+
+    // 保存不含注入内容的 messages 副本，供缓存命中判定使用
+    // in-chat 提示词按 injection_depth 注入，位置随消息数变化，若参与指纹比对会导致前缀每次都断裂
+    // 续写指令同理。缓存命中应只反映对话历史本身的连续性
+    messagesForCache = messages.map((m) => ({ role: m.role, content: m.content }));
 
     // 记忆功能：将最近 N 条总结注入 systemPrompt
     finalSystemPrompt = baseSystemPrompt;
@@ -772,6 +779,10 @@ async function streamLLMResponse(
     });
   }
 
+  // 缓存命中判定：对对话历史消息（不含动态注入的 in-chat 提示词/续写指令）计算指纹
+  // 与上一次请求比对，得出 cachedTokens / hit。指纹复用前缀 token 数以避免重复 encode。
+  const cacheAnalysis = computeCacheHit(getCacheStats(conv)?.lastContext, messagesForCache, finalSystemPrompt);
+
   try {
     const stream = llmService.chat(messages, llmConfig, {
       systemPrompt: finalSystemPrompt,
@@ -781,12 +792,14 @@ async function streamLLMResponse(
     });
 
     let usageTokens = 0;
+    let usagePromptTokens = 0;
     for await (const chunk of stream) {
       if (chunk.type === 'thinking') {
         fullThinking += chunk.content;
         writeSSE({ type: 'thinking', content: chunk.content });
       } else if (chunk.type === 'usage') {
         usageTokens = chunk.completionTokens || chunk.totalTokens || 0;
+        usagePromptTokens = chunk.promptTokens || 0;
       } else {
         fullContent += chunk.content;
         writeSSE({ type: 'chunk', content: chunk.content });
@@ -800,6 +813,10 @@ async function streamLLMResponse(
 
     // token 计数：优先用 API 返回的真实值，否则用 gpt-tokenizer 估算
     const outputTokens = usageTokens > 0 ? usageTokens : (await import('gpt-tokenizer')).encode(finalContent).length;
+    // 输入 token：优先用 API 返回的 promptTokens，否则用 gpt-tokenizer 估算（systemPrompt + 全部消息）
+    // 注意：不同 provider 的 promptTokens 语义不同（OpenAI 含缓存、Anthropic 不含），
+    // 此处仅作辅助展示，命中率计算统一用 cachedTokens / inputTokens（clamp 0-1）
+    const promptTokens = usagePromptTokens > 0 ? usagePromptTokens : estimatePromptTokens(finalSystemPrompt, messages);
     if (swipeMessageId) {
       // swipe 模式：将新内容追加到 swipes 数组，思维链追加到 swipeThinkings
       const swipeMsg = conv.messages.find((m) => m.id === swipeMessageId);
@@ -816,6 +833,10 @@ async function streamLLMResponse(
           duration: Date.now() - startTime,
           tokens: outputTokens,
           model: llmConfig.model,
+          promptTokens,
+          completionTokens: outputTokens,
+          cachedTokens: cacheAnalysis.cachedTokens,
+          cacheHit: cacheAnalysis.hit,
           ...(fullThinking ? { thinking: fullThinking } : {}),
         },
       });
@@ -826,8 +847,27 @@ async function streamLLMResponse(
           duration: Date.now() - startTime,
           tokens: outputTokens,
           model: llmConfig.model,
+          promptTokens,
+          completionTokens: outputTokens,
+          cachedTokens: cacheAnalysis.cachedTokens,
+          cacheHit: cacheAnalysis.hit,
           ...(fullThinking ? { thinking: fullThinking } : {}),
         },
+      });
+    }
+
+    // 更新缓存状态机：保存本次请求的指纹供下一次命中判定（仅在成功路径更新）
+    try {
+      const latestConv = await conversationService.get(req.params.id, conv.userId);
+      if (latestConv) {
+        await conversationService.update(req.params.id, conv.userId, {
+          settings: { ...latestConv.settings, cacheStats: { lastContext: cacheAnalysis.fingerprint } },
+        });
+      }
+    } catch (err) {
+      logger.error('更新缓存状态失败', {
+        conversationId: req.params.id,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
 

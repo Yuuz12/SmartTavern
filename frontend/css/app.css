@@ -698,6 +698,10 @@ button {
   background-color: rgb(var(--mdui-color-error-container, 249 222 220));
   color: rgb(var(--mdui-color-on-error-container, 65 14 11));
 }
+.cp-badge--neutral {
+  background-color: rgb(var(--mdui-color-secondary-container, 232 222 248));
+  color: rgb(var(--mdui-color-on-secondary-container, 29 25 43));
+}
 .cp-badge__dot {
   display: inline-block;
   width: 6px;
@@ -934,6 +938,308 @@ mdui-card.cp-memory-card {
 .cp-memory-card__actions {
   display: flex;
   gap: 2px;
+}
+
+/* ============ 缓存统计 ============ */
+.cp-cache-headline {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.cp-cache-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.cp-cache-ring__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.cp-cache-ring__track {
+  fill: none;
+  stroke: rgb(var(--mdui-color-surface-container-highest, 214 207 224));
+  stroke-width: 10;
+}
+.cp-cache-ring__progress {
+  fill: none;
+  stroke: rgb(var(--mdui-color-primary, 103 80 164));
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+}
+.cp-cache-ring__label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.cp-cache-ring__value {
+  font-size: 22px;
+  font-weight: 600;
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  line-height: 1;
+}
+.cp-cache-ring__sub {
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-headline__info {
+  flex: 1;
+  min-width: 180px;
+}
+.cp-cache-headline__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  margin-bottom: 4px;
+}
+.cp-cache-headline__desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-headline__hint {
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  opacity: 0.85;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background-color: rgb(var(--mdui-color-surface-container-high, 234 221 247));
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+/* 统计卡片网格 */
+.cp-cache-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 768px) {
+  .cp-cache-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+mdui-card.cp-cache-stat-card {
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cp-cache-stat-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background-color: rgb(var(--mdui-color-primary-container, 234 221 255));
+  color: rgb(var(--mdui-color-on-primary-container, 33 0 93));
+}
+.cp-cache-stat-card__icon--tertiary {
+  background-color: rgb(var(--mdui-color-tertiary-container, 255 216 228));
+  color: rgb(var(--mdui-color-on-tertiary-container, 49 17 29));
+}
+.cp-cache-stat-card__icon--secondary {
+  background-color: rgb(var(--mdui-color-secondary-container, 232 222 248));
+  color: rgb(var(--mdui-color-on-secondary-container, 29 25 43));
+}
+.cp-cache-stat-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.cp-cache-stat-card__value {
+  font-size: 20px;
+  font-weight: 600;
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  line-height: 1.2;
+}
+.cp-cache-stat-card__label {
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  margin-top: 2px;
+}
+
+/* Token 分布堆叠条 */
+.cp-cache-bar {
+  width: 100%;
+  height: 14px;
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  overflow: hidden;
+  display: flex;
+  background-color: rgb(var(--mdui-color-surface-container-highest, 214 207 224));
+  margin: 8px 0;
+}
+.cp-cache-bar__seg {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+.cp-cache-bar__seg--input { background-color: rgb(var(--mdui-color-primary, 103 80 164)); }
+.cp-cache-bar__seg--output { background-color: rgb(var(--mdui-color-tertiary, 125 82 96)); }
+.cp-cache-bar__seg--saved { background-color: rgb(var(--mdui-color-secondary, 98 91 113)); }
+.cp-cache-bar__legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-bar__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cp-cache-bar__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* 热力图（GitHub 风格） */
+.cp-cache-heatmap {
+  overflow-x: auto;
+  padding: 4px 0;
+}
+.cp-cache-heatmap__months {
+  position: relative;
+  height: 16px;
+  margin-left: 20px; /* 给左侧星期标签列留空间（16px 宽 + 4px gap） */
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-heatmap__month {
+  position: absolute;
+  white-space: nowrap;
+  line-height: 16px;
+}
+.cp-cache-heatmap__body {
+  display: flex;
+  gap: 4px;
+}
+.cp-cache-heatmap__weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, 14px);
+  gap: 3px;
+  width: 16px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-heatmap__weekdays span {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 14px;
+  line-height: 14px;
+}
+.cp-cache-heatmap__grid {
+  display: grid;
+  grid-template-rows: repeat(7, 14px);
+  grid-auto-flow: column;
+  grid-auto-columns: 14px;
+  gap: 3px;
+  min-width: max-content;
+}
+.cp-cache-heatmap__cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background-color: rgb(var(--mdui-color-surface-container-highest, 214 207 224));
+  position: relative;
+  cursor: default;
+}
+/* mdui 颜色变量用逗号分隔（如 207, 188, 255），需用 rgba() 旧语法承接 alpha；
+   rgb(... / alpha) 新语法要求空格分隔，与 mdui 变量混用会解析失败导致背景透明 */
+.cp-cache-heatmap__cell--l1 { background-color: rgba(var(--mdui-color-primary, 103, 80, 164), 0.25); }
+.cp-cache-heatmap__cell--l2 { background-color: rgba(var(--mdui-color-primary, 103, 80, 164), 0.45); }
+.cp-cache-heatmap__cell--l3 { background-color: rgba(var(--mdui-color-primary, 103, 80, 164), 0.7); }
+.cp-cache-heatmap__cell--l4 { background-color: rgba(var(--mdui-color-primary, 103, 80, 164), 0.95); }
+.cp-cache-heatmap__cell--empty {
+  background-color: rgb(var(--mdui-color-surface-container-highest, 214 207 224));
+}
+.cp-cache-heatmap__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cp-cache-heatmap__legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+}
+.cp-cache-heatmap__legend .cp-cache-heatmap__cell {
+  width: 12px;
+  height: 12px;
+  cursor: default;
+}
+
+/* 缓存统计功能提示 */
+.cp-cache-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background-color: rgb(var(--mdui-color-secondary-container, 232 222 248));
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgb(var(--mdui-color-on-secondary-container, 33 0 93));
+}
+.cp-cache-notice__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  margin-top: -1px;
+}
+.cp-cache-notice strong {
+  font-weight: 600;
+}
+
+/* 消息缓存明细列表 */
+.cp-cache-msg-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.cp-cache-msg-item__role {
+  font-weight: 500;
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  flex-shrink: 0;
+  width: 36px;
+}
+.cp-cache-msg-item__meta {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  flex-wrap: wrap;
+}
+.cp-cache-msg-item__time {
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  opacity: 0.8;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
 /* 世界书条目（控制面板内） */

@@ -92,6 +92,7 @@ export async function request(url, options = {}) {
   }
 
   const config = {
+    cache: 'no-cache', // GET 请求不使用浏览器缓存，避免统计数据/列表过期
     ...options,
     headers,
   };

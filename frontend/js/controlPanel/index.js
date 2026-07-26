@@ -10,6 +10,7 @@ import { renderExtensions } from './extensions.js';
 import { renderPersonas } from './personas.js';
 import { renderCharacters } from './characters.js';
 import { renderMemory } from './memory.js';
+import { renderCache } from './cache.js';
 import { renderRegex } from './regex.js';
 
 // ============ Tab 配置 ============
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'personas', renderer: renderPersonas },
   { id: 'characters', renderer: renderCharacters },
   { id: 'memory', renderer: renderMemory },
+  { id: 'cache', renderer: renderCache },
   { id: 'regex', renderer: renderRegex },
 ];
 

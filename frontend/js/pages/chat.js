@@ -484,6 +484,7 @@ function renderMessages() {
               bubble.innerHTML = renderMarkdown(fullContent) || '<em>(空回复)</em>';
             }
             selectConversation(conv.id);
+            document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
           },
           onMemoryGenerating: () => { setMemoryGenerating(true); },
           onMemoryDone: () => { setMemoryGenerating(false); },
@@ -1324,6 +1325,7 @@ async function sendMessage() {
           safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
         }
         selectConversation(conv.id);
+        document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
       },
       onMemoryGenerating: () => {
         setMemoryGenerating(true);
@@ -1495,6 +1497,7 @@ async function regenerateMessage() {
           safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
         }
         selectConversation(conv.id);
+        document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
       },
       onMemoryGenerating: () => {
         setMemoryGenerating(true);
@@ -1640,6 +1643,7 @@ async function continueLastMessage(conv, lastAssistantMsg) {
           safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
         }
         selectConversation(conv.id);
+        document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
       },
       onMemoryGenerating: () => {
         setMemoryGenerating(true);

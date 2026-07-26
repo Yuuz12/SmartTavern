@@ -302,6 +302,51 @@ export interface MemorySettings {
   llmConfigId?: string;
 }
 
+// ============ 缓存功能类型 ============
+
+/**
+ * 缓存指纹单条目：单条消息的哈希与 token 数
+ * - h: sha256(role + '\0' + content) 的十六进制前缀
+ * - t: 该消息内容的 token 数（gpt-tokenizer 估算）
+ */
+export interface CacheFingerprintEntry {
+  h: string;
+  t: number;
+}
+
+/**
+ * 缓存指纹：描述一次 LLM 请求的完整上下文（systemPrompt + messages）
+ * 用于与上一次请求比对，判定缓存命中
+ */
+export interface CacheFingerprint {
+  /** systemPrompt 的哈希 */
+  systemPromptHash: string;
+  /** 每条消息的指纹条目（按发送顺序） */
+  entries: CacheFingerprintEntry[];
+}
+
+/**
+ * 缓存统计状态（存储在 conv.settings.cacheStats 中）
+ * 仅保存上一次请求的指纹用于下一次命中判定，不保存累计值（累计值按需聚合）
+ */
+export interface CacheStats {
+  lastContext: CacheFingerprint;
+}
+
+/**
+ * 消息级缓存元数据（扩展 Message.metadata）
+ */
+export interface MessageCacheMetadata {
+  /** 输入 token 数（含 systemPrompt + 全部消息） */
+  promptTokens?: number;
+  /** 输出 token 数 */
+  completionTokens?: number;
+  /** 本次请求命中缓存的 token 数（估算） */
+  cachedTokens?: number;
+  /** 是否命中缓存 */
+  cacheHit?: boolean;
+}
+
 // ============ API 响应类型 ============
 
 export interface ApiResponse<T = unknown> {

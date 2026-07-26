@@ -32,8 +32,8 @@ const DEFAULT_QUOTE_PAIRS = [
   { open: '【', close: '】', name: '中方括号', enabled: true },
   { open: '（', close: '）', name: '中文括号', enabled: false },
   { open: '(', close: ')', name: '英文括号', enabled: false },
-  { open: '"', close: '"', name: '英文双引号', enabled: false },
-  { open: "'", close: "'", name: '英文单引号', enabled: false },
+  { open: '"', close: '"', name: '英文双引号', enabled: true },
+  { open: "'", close: "'", name: '英文单引号', enabled: true },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -226,20 +226,10 @@ export function renderUserSettings(container, opts = {}) {
       </div>
       <div class="cp-switch-row">
         <div>
-          <div class="cp-switch-row__label">人物对话高亮</div>
-          <div class="cp-switch-row__desc">用主题色高亮引号包裹的对话内容</div>
+          <div class="cp-switch-row__label">对话引号设置</div>
+          <div class="cp-switch-row__desc">配置对话高亮、引号对与加粗显示</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-          <mdui-button id="edit-dialog-quotes" variant="outlined">引号对</mdui-button>
-          <mdui-switch id="dialog-highlight" ${settings.dialogHighlight ? 'checked' : ''}></mdui-switch>
-        </div>
-      </div>
-      <div class="cp-switch-row">
-        <div>
-          <div class="cp-switch-row__label">对话高亮加粗</div>
-          <div class="cp-switch-row__desc">将高亮的对话文字加粗显示</div>
-        </div>
-        <mdui-switch id="dialog-bold" ${settings.dialogHighlightBold ? 'checked' : ''}></mdui-switch>
+        <mdui-button id="edit-dialog-quotes" variant="outlined">编辑</mdui-button>
       </div>
     </div>
 
@@ -380,8 +370,6 @@ function bindEvents(container) {
     { id: 'send-on-enter', key: 'sendOnEnter' },
     { id: 'confirm-delete', key: 'confirmMessageDelete' },
     { id: 'expand-thinking', key: 'expandThinkingAfterComplete' },
-    { id: 'dialog-highlight', key: 'dialogHighlight' },
-    { id: 'dialog-bold', key: 'dialogHighlightBold' },
   ];
   switches.forEach(({ id, key }) => {
     const el = container.querySelector(`#${id}`);
@@ -449,6 +437,20 @@ function bindEvents(container) {
     const result = await showModal({
       title: '对话引号对',
       content: `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:15px;">启用对话高亮</div>
+            <div style="font-size:12px;color:rgb(var(--mdui-color-on-surface-variant,73 69 79));">用主题色高亮引号包裹的对话内容</div>
+          </div>
+          <mdui-switch id="dialog-highlight-toggle" ${getSettings().dialogHighlight ? 'checked' : ''}></mdui-switch>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:15px;">对话高亮加粗</div>
+            <div style="font-size:12px;color:rgb(var(--mdui-color-on-surface-variant,73 69 79));">将高亮的对话文字加粗显示</div>
+          </div>
+          <mdui-switch id="dialog-bold-toggle" ${getSettings().dialogHighlightBold ? 'checked' : ''}></mdui-switch>
+        </div>
         <div id="dialog-quote-list" style="display:flex;flex-direction:column;gap:6px;min-width:300px;"></div>
         <mdui-divider style="margin:12px 0;"></mdui-divider>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -459,11 +461,26 @@ function bindEvents(container) {
         </div>
       `,
       actions: [
+        { text: '重置默认', value: 'reset', type: 'text' },
         { text: '取消', value: 'cancel', type: 'text' },
         { text: '保存', value: 'ok', type: 'filled' },
       ],
       onMount: (dialog, close) => {
         const listEl = dialog.querySelector('#dialog-quote-list');
+        const saveBtn = dialog.querySelector('[data-action="ok"]');
+        const resetBtn = dialog.querySelector('[data-action="reset"]');
+
+        // 启用对话高亮开关：实时保存
+        const highlightToggle = dialog.querySelector('#dialog-highlight-toggle');
+        highlightToggle?.addEventListener('change', (e) => {
+          updateSettings({ dialogHighlight: e.target.checked });
+        });
+        // 对话高亮加粗开关：实时保存
+        const boldToggle = dialog.querySelector('#dialog-bold-toggle');
+        boldToggle?.addEventListener('change', (e) => {
+          updateSettings({ dialogHighlightBold: e.target.checked });
+        });
+
         const renderList = () => {
           listEl.innerHTML = pairs.map((p, i) => `
             <div style="display:flex;align-items:center;gap:12px;padding:6px 8px;border-radius:8px;background:rgb(var(--mdui-color-surface-container-high,236 230 240));">
@@ -474,8 +491,9 @@ function bindEvents(container) {
             </div>
           `).join('');
           listEl.querySelectorAll('[data-toggle]').forEach((sw) => {
-            sw.addEventListener('change', () => {
-              pairs[Number(sw.dataset.toggle)].enabled = sw.checked;
+            sw.addEventListener('change', (e) => {
+              const idx = Number(sw.dataset.toggle);
+              pairs[idx].enabled = e.target.checked;
             });
           });
           listEl.querySelectorAll('[data-del]').forEach((btn) => {
@@ -497,9 +515,18 @@ function bindEvents(container) {
           nameEl.value = ''; openEl.value = ''; closeEl.value = '';
           renderList();
         });
-        dialog.querySelector('[data-action="ok"]').addEventListener('click', () => {
+        // 重置按钮：用 capture 阶段绑定并阻止 Modal.js 自动绑定的 close('reset')，避免关闭对话框
+        resetBtn.addEventListener('click', (e) => {
+          e.stopImmediatePropagation();
+          pairs = DEFAULT_QUOTE_PAIRS.map((p) => ({ ...p }));
+          renderList();
+          showSuccess('已重置为默认引号对');
+        }, true);
+        // 保存按钮：用 capture 阶段绑定，确保 close(pairs) 先于 Modal.js 的 close('ok') 执行
+        saveBtn.addEventListener('click', (e) => {
+          e.stopImmediatePropagation();
           close(pairs);
-        });
+        }, true);
       },
     });
     if (Array.isArray(result)) {

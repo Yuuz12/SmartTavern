@@ -106,6 +106,12 @@ export const fileApi = {
   deleteFile: (url) => del('/files', { url }),
 };
 
+// ============ 缓存统计 ============
+export const cacheApi = {
+  getOverview: (days = 90) => get('/cache/overview', { days }),
+  getConversation: (id) => get(`/cache/conversation/${id}`),
+};
+
 export default {
   auth: authApi,
   user: userApi,
@@ -114,4 +120,5 @@ export default {
   llmConfig: llmConfigApi,
   conversation: conversationApi,
   file: fileApi,
+  cache: cacheApi,
 };

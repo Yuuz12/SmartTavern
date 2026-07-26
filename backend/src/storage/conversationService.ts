@@ -62,6 +62,15 @@ export class ConversationService {
     return result;
   }
 
+  /**
+   * 获取用户的全部对话（含完整消息，并行读取）
+   * 供缓存统计/热力图等按需聚合场景使用
+   */
+  async getAllFullByUserId(userId: string): Promise<Conversation[]> {
+    const storage = this.getStorage(userId);
+    return storage.getAllEntities();
+  }
+
   /** 构建索引项 */
   private buildIndexItem(entity: Conversation): ConversationIndexItem {
     return {

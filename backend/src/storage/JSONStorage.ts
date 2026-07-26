@@ -184,6 +184,18 @@ export class JSONStorage<T extends { id: string; createdAt: string; updatedAt: s
   }
 
   /**
+   * 获取全部实体（并行读取，不分页）
+   * 相比 query(() => true) 的顺序读取，大幅提升大量实体场景下的扫描性能
+   */
+  async getAllEntities(): Promise<T[]> {
+    const index = await this.readIndex();
+    const entities = await Promise.all(
+      index.map((item) => this.get(item.id as string)),
+    );
+    return entities.filter((e) => e !== null) as T[];
+  }
+
+  /**
    * 获取所有实体（支持分页、排序）
    */
   async getAll(options?: QueryOptions): Promise<{ items: T[]; total: number }> {

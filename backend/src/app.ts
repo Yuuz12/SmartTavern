@@ -18,6 +18,7 @@ import conversationRoutes from './modules/conversation/conversation.routes.js';
 import llmConfigRoutes from './modules/llm-config/llmConfig.routes.js';
 import systemRoutes from './modules/system/system.routes.js';
 import fileRoutes from './modules/file/file.routes.js';
+import cacheRoutes from './modules/cache/cache.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +60,12 @@ app.use('/uploads/:userId', (req, res, next) => {
 });
 
 // ============ API 路由 ============
+// API 响应一律不缓存，避免统计数据/对话列表等过期（浏览器启发式缓存可能导致显示旧数据）
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/characters', characterRoutes);
@@ -67,6 +74,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/llm-configs', llmConfigRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/cache', cacheRoutes);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {
