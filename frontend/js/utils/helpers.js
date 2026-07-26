@@ -160,10 +160,11 @@ export function renderMarkdown(text) {
 
   processed = outputLines.join('');
 
-  // 4. 行内格式（粗体/斜体）
-  processed = processed.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // 4. 行内格式（粗体/斜体）；星号包裹的斜体加 md-em 类（降低透明度的叙述/动作样式），
+  // 区分于状态提示等直接使用 <em> 的 UI 文本
+  processed = processed.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em class="md-em">$1</em></strong>');
   processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  processed = processed.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  processed = processed.replace(/\*(.+?)\*/g, '<em class="md-em">$1</em>');
 
   // 5. 恢复行内代码
   processed = processed.replace(/\x00INLINE_(\d+)\x00/g, (_, idx) => inlineCodes[Number(idx)]);

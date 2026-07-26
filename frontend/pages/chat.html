@@ -46,7 +46,7 @@
     </mdui-navigation-drawer>
 
     <!-- ============ 顶部应用栏 ============ -->
-    <mdui-top-app-bar variant="small" scroll-target="#chat-messages" order="2">
+    <mdui-top-app-bar variant="small" scroll-target="#chat-messages" order="2" class="chat-top-bar">
       <mdui-button-icon icon="menu" id="toggle-sidebar" label="切换侧边栏"></mdui-button-icon>
       <mdui-top-app-bar-title>
         <div id="current-conv-title">选择或创建对话</div>
@@ -63,15 +63,15 @@
         <div class="control-panel" id="control-panel">
           <div class="control-panel__tabs-bar">
             <mdui-tabs id="control-panel-tabs" placement="top-start" class="control-panel__tabs">
-              <mdui-tab value="api-connection" icon="power">API 连接</mdui-tab>
-              <mdui-tab value="world-info" icon="menu_book">世界信息</mdui-tab>
-              <mdui-tab value="user-settings" icon="manage_accounts">用户设置</mdui-tab>
-              <mdui-tab value="extensions" icon="extension">扩展</mdui-tab>
-              <mdui-tab value="personas" icon="face">个性</mdui-tab>
-              <mdui-tab value="characters" icon="person">角色</mdui-tab>
-              <mdui-tab value="memory" icon="psychology">记忆</mdui-tab>
-              <mdui-tab value="cache" icon="bolt">缓存</mdui-tab>
-              <mdui-tab value="regex" icon="find_replace">正则</mdui-tab>
+              <mdui-tab value="api-connection" icon="power" inline>API 连接</mdui-tab>
+              <mdui-tab value="world-info" icon="menu_book" inline>世界信息</mdui-tab>
+              <mdui-tab value="user-settings" icon="manage_accounts" inline>用户设置</mdui-tab>
+              <mdui-tab value="extensions" icon="extension" inline>扩展</mdui-tab>
+              <mdui-tab value="personas" icon="face" inline>个性</mdui-tab>
+              <mdui-tab value="characters" icon="person" inline>角色</mdui-tab>
+              <mdui-tab value="memory" icon="psychology" inline>记忆</mdui-tab>
+              <mdui-tab value="cache" icon="bolt" inline>缓存</mdui-tab>
+              <mdui-tab value="regex" icon="find_replace" inline>正则</mdui-tab>
             </mdui-tabs>
           </div>
 

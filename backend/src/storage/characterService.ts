@@ -83,9 +83,18 @@ export class CharacterService {
   }
 
   /**
-   * 删除角色卡
+   * 删除角色卡（同时级联删除导入时自带的内嵌世界书）
    */
   async delete(id: string, userId: string): Promise<boolean> {
+    // 先级联清理来源于该角色卡的内嵌世界书（用户自建/手动绑定的世界书不受影响）
+    try {
+      const removed = await worldbookService.deleteBySourceCharacterId(userId, id);
+      if (removed > 0) {
+        logger.info('角色卡内嵌世界书已级联删除', { characterId: id, count: removed });
+      }
+    } catch (err) {
+      logger.error('角色卡内嵌世界书级联删除失败', { characterId: id, error: (err as Error).message });
+    }
     return this.getStorage(userId).delete(id);
   }
 
@@ -118,11 +127,14 @@ export class CharacterService {
       : Object.values(rawEntries as Record<string, Record<string, unknown>>);
 
     return entryList.map((entry, index) => {
+      // position 兼容：数字 0/1、'before'/'after'、V2 规范的 'before_char'/'after_char'
       let position: 'before' | 'after' = 'before';
       if (typeof entry.position === 'number') {
         position = entry.position === 1 ? 'after' : 'before';
       } else if (entry.position === 'before' || entry.position === 'after') {
         position = entry.position as 'before' | 'after';
+      } else if (entry.position === 'after_char') {
+        position = 'after';
       }
 
       const uid = entry.uid != null ? String(entry.uid) : `entry_${index}`;
@@ -142,9 +154,11 @@ export class CharacterService {
 
       const secondaryKeys = Array.isArray(entry.secondaryKeys)
         ? (entry.secondaryKeys as string[])
-        : Array.isArray(entry.keysecondary)
-          ? (entry.keysecondary as string[])
-          : [];
+        : Array.isArray(entry.secondary_keys)
+          ? (entry.secondary_keys as string[])
+          : Array.isArray(entry.keysecondary)
+            ? (entry.keysecondary as string[])
+            : [];
 
       const normalized: WorldbookEntry = {
         uid,
@@ -157,10 +171,17 @@ export class CharacterService {
         insertionOrder:
           typeof entry.insertionOrder === 'number'
             ? entry.insertionOrder
-            : typeof entry.order === 'number'
-              ? entry.order
-              : 100,
-        caseSensitive: typeof entry.caseSensitive === 'boolean' ? entry.caseSensitive : false,
+            : typeof entry.insertion_order === 'number'
+              ? entry.insertion_order
+              : typeof entry.order === 'number'
+                ? entry.order
+                : 100,
+        caseSensitive:
+          typeof entry.caseSensitive === 'boolean'
+            ? entry.caseSensitive
+            : typeof entry.case_sensitive === 'boolean'
+              ? entry.case_sensitive
+              : false,
         priority: typeof entry.priority === 'number' ? entry.priority : 10,
         id: index + 1,
         selective: typeof entry.selective === 'boolean' ? entry.selective : false,
@@ -177,7 +198,8 @@ export class CharacterService {
 
   /**
    * 导入角色卡（支持 SillyTavern v1/v2 格式）
-   * 若角色卡内嵌 character_book（角色世界书），自动提取并创建世界书绑定到角色
+   * 若角色卡内嵌 character_book（角色世界书），自动提取并创建世界书绑定到角色，
+   * 并记录 sourceCharacterId 来源标记，供删除时级联清理、导出时回写 character_book
    */
   async importCharacter(userId: string, rawData: Record<string, unknown>): Promise<Character> {
     // 适配 v2 格式（data 字段）
@@ -185,31 +207,8 @@ export class CharacterService {
 
     const characterName = String(data.name || '未命名角色');
 
-    // 提取角色世界书（character_book）
-    let worldBookIds: string[] = [];
-    const characterBook = data.character_book as Record<string, unknown> | undefined;
-    if (characterBook && typeof characterBook === 'object') {
-      try {
-        const entries = this.normalizeCharacterBookEntries(characterBook.entries);
-        if (entries.length > 0) {
-          const wb = await worldbookService.createWorldbook(userId, {
-            name: `${characterName} 的角色世界书`,
-            description: '从角色卡导入的内嵌世界书',
-            entries,
-          });
-          worldBookIds.push(wb.id);
-          logger.info('角色世界书已提取', {
-            characterName,
-            worldbookId: wb.id,
-            entryCount: entries.length,
-          });
-        }
-      } catch (err) {
-        logger.error('角色世界书提取失败', { error: (err as Error).message });
-      }
-    }
-
-    return this.createCharacter(userId, {
+    // 先创建角色卡，拿到 ID 后再创建内嵌世界书以记录来源
+    const character = await this.createCharacter(userId, {
       name: characterName,
       avatar: data.avatar as string | undefined,
       description: data.description as string | undefined,
@@ -225,17 +224,87 @@ export class CharacterService {
       tags: data.tags as string[] | undefined,
       spec: rawData.spec as string | undefined,
       specVersion: (rawData.spec_version || rawData.specVersion) as string | undefined,
-      worldBookIds,
+      worldBookIds: [],
       extensions: data.extensions as Record<string, unknown> | undefined,
     });
+
+    // 提取角色世界书（character_book）
+    const characterBook = data.character_book as Record<string, unknown> | undefined;
+    if (characterBook && typeof characterBook === 'object') {
+      try {
+        const entries = this.normalizeCharacterBookEntries(characterBook.entries);
+        if (entries.length > 0) {
+          const wb = await worldbookService.createWorldbook(userId, {
+            name: typeof characterBook.name === 'string' && characterBook.name
+              ? characterBook.name
+              : `${characterName} 的角色世界书`,
+            description: '从角色卡导入的内嵌世界书',
+            entries,
+            sourceCharacterId: character.id,
+          });
+          const updated = await this.updateCharacter(character.id, userId, { worldBookIds: [wb.id] });
+          logger.info('角色世界书已提取', {
+            characterName,
+            worldbookId: wb.id,
+            entryCount: entries.length,
+          });
+          return updated;
+        }
+      } catch (err) {
+        logger.error('角色世界书提取失败', { error: (err as Error).message });
+      }
+    }
+
+    return character;
+  }
+
+  /**
+   * 将内部 WorldbookEntry 转换为 SillyTavern character_book 条目格式（V2 规范）
+   */
+  private toCharacterBookEntries(entries: WorldbookEntry[]): Record<string, unknown>[] {
+    return entries.map((e, index) => ({
+      keys: e.keys || [],
+      secondary_keys: e.secondaryKeys || [],
+      comment: e.comment || '',
+      content: e.content || '',
+      constant: e.constant ?? false,
+      selective: e.selective ?? false,
+      insertion_order: e.insertionOrder ?? 100,
+      enabled: e.enabled ?? true,
+      position: e.position === 'after' ? 'after_char' : 'before_char',
+      case_sensitive: e.caseSensitive ?? false,
+      name: e.name || '',
+      priority: e.priority ?? 10,
+      id: e.id ?? index + 1,
+      extensions: e.extensions || {},
+    }));
   }
 
   /**
    * 导出角色卡（SillyTavern v2 格式）
+   * 若角色卡存在导入时自带的内嵌世界书，一并写入 character_book 字段
    */
   async exportCharacter(id: string, userId: string): Promise<Record<string, unknown>> {
     const char = await this.get(id, userId);
     if (!char) throw new Error(`角色卡不存在: ${id}`);
+
+    // 查找来源于该角色卡的内嵌世界书，组装回 character_book
+    let characterBook: Record<string, unknown> | undefined;
+    try {
+      const worldbooks = await worldbookService.getByUserId(userId);
+      const sourceWb = worldbooks.find(
+        (wb) => wb.sourceCharacterId === id && (char.worldBookIds || []).includes(wb.id),
+      );
+      if (sourceWb && sourceWb.entries.length > 0) {
+        characterBook = {
+          name: sourceWb.name,
+          entries: this.toCharacterBookEntries(sourceWb.entries),
+          extensions: {},
+        };
+      }
+    } catch (err) {
+      logger.error('导出角色世界书失败', { characterId: id, error: (err as Error).message });
+    }
 
     return {
       spec: 'chara_card_v2',
@@ -255,6 +324,7 @@ export class CharacterService {
         creator: char.creator || '',
         character_version: char.characterVersion || '',
         extensions: char.extensions || {},
+        ...(characterBook ? { character_book: characterBook } : {}),
       },
     };
   }

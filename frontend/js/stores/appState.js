@@ -16,24 +16,10 @@ class AppState {
       sidebarCollapsed: storage.get('sidebarCollapsed', false),
       asideCollapsed: storage.get('asideCollapsed', false),
       theme: storage.get('theme', 'system'),
-      /** 用户设置（字体/消息显示/交互等，实时生效） */
-      userSettings: storage.get('cp_user_settings', {
-        theme: 'system',
-        fontScale: 1,
-        chatWidth: 50,
-        messageFontSize: 14,
-        showTimestamps: true,
-        showAvatars: true,
-        showMessageId: false,
-        showMessageTokenCount: false,
-        smoothStreaming: true,
-        autoScrollToBottom: true,
-        sendOnEnter: true,
-        confirmMessageDelete: true,
-        collapseNewlines: false,
-        trimSentences: false,
-        customCss: '',
-      }),
+      /** 用户设置（字体/消息显示/交互等，实时生效）
+       * 默认值由 controlPanel/userSettings.js 的 DEFAULT_SETTINGS 统一提供（getSettings 合并），
+       * 这里不再重复维护一份默认值副本，避免两处不一致 */
+      userSettings: storage.get('cp_user_settings', {}),
       loading: false,
     };
     this.listeners = new Map();

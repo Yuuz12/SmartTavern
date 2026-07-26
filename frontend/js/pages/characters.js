@@ -162,7 +162,7 @@ async function handleAction(action, id) {
       }
       break;
     case 'delete':
-      const ok = await confirm(`确定要删除角色卡「${character.name}」吗？此操作不可恢复。`, '删除角色卡');
+      const ok = await confirm(`确定要删除角色卡「${character.name}」吗？导入时自带的世界书会一并删除，此操作不可恢复。`, '删除角色卡');
       if (!ok) return;
       try {
         await characterApi.delete(id);

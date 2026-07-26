@@ -201,37 +201,31 @@ function renderStatCards(container, g) {
       label: '总对话数',
       value: String(g.totalConversations || 0),
       icon: 'forum',
-      iconCls: '',
     },
     {
       label: '总信息数',
       value: String(g.totalMessages || 0),
       icon: 'message',
-      iconCls: 'cp-cache-stat-card__icon--secondary',
     },
     {
       label: '输入 Token',
       value: formatK(g.inputTokens || 0),
       icon: 'login',
-      iconCls: '',
     },
     {
       label: '输出 Token',
       value: formatK(g.outputTokens || 0),
       icon: 'logout',
-      iconCls: 'cp-cache-stat-card__icon--tertiary',
     },
     {
       label: '缓存节省 Token',
       value: formatK(g.savedTokens || 0),
       icon: 'bolt',
-      iconCls: 'cp-cache-stat-card__icon--secondary',
     },
     {
       label: '全局缓存命中率',
       value: formatPercent(g.globalHitRate || 0),
       icon: 'cached',
-      iconCls: '',
     },
   ];
 
@@ -239,9 +233,7 @@ function renderStatCards(container, g) {
     .map(
       (c) => `
       <mdui-card class="cp-cache-stat-card" variant="filled">
-        <div class="cp-cache-stat-card__icon ${c.iconCls}">
-          <mdui-icon name="${c.icon}"></mdui-icon>
-        </div>
+        <mdui-icon class="cp-cache-stat-card__icon" name="${c.icon}"></mdui-icon>
         <div class="cp-cache-stat-card__body">
           <div class="cp-cache-stat-card__value">${escapeHtml(c.value)}</div>
           <div class="cp-cache-stat-card__label">${escapeHtml(c.label)}</div>
@@ -288,13 +280,7 @@ function renderTokenBar(container, g) {
 
 // ============ 聊天热力图 ============
 
-/**
- * 一周从周一开始：周一=0, 周二=1, ..., 周日=6
- * 这样周日永远在每列最后一行，今天（若为周日）落在最右下角
- */
-function mondayFirstOffset(date) {
-  return (date.getDay() + 6) % 7;
-}
+const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
 function renderHeatmap(container, heatmap) {
   const el = container.querySelector('#cp-cache-heatmap');
@@ -307,11 +293,19 @@ function renderHeatmap(container, heatmap) {
 
   const max = heatmap.reduce((m, d) => Math.max(m, d.count || 0), 0);
 
-  // 首日在一周（周一起）中的位置：左上角不足一周的部分用隐藏格子对齐
-  const firstDate = new Date(heatmap[0].date + 'T00:00:00');
-  const firstDayOffset = isNaN(firstDate.getTime()) ? 0 : mondayFirstOffset(firstDate);
+  // 从末尾对齐：左上角补隐藏格子凑满整列，保证最新一天（今天）永远落在最右下角
+  const firstDayOffset = (7 - (heatmap.length % 7)) % 7;
 
-  // 生成单元格：左上角多隐藏（对齐到周一）；最后一列少不补（不到周日不补齐）
+  // 星期标签随末日动态生成：最后一行固定为今天的星期，往上依次递推
+  const lastDate = new Date(heatmap[heatmap.length - 1].date + 'T00:00:00');
+  const lastDay = isNaN(lastDate.getTime()) ? 0 : lastDate.getDay();
+  const weekdayHtml = Array.from({ length: 7 }, (_, r) => {
+    // 偶数行显示标签、奇数行留空，与原有隔行标注风格一致
+    const name = r % 2 === 0 ? WEEKDAY_NAMES[(lastDay - (6 - r) + 14) % 7] : '';
+    return `<span>${name}</span>`;
+  }).join('');
+
+  // 生成单元格：左上角多隐藏（凑满整列）
   const cells = [];
   for (let i = 0; i < firstDayOffset; i++) {
     cells.push(`<div class="cp-cache-heatmap__cell cp-cache-heatmap__cell--empty" style="visibility:hidden;"></div>`);
@@ -348,15 +342,7 @@ function renderHeatmap(container, heatmap) {
     <div class="cp-cache-heatmap">
       <div class="cp-cache-heatmap__months">${monthsHtml}</div>
       <div class="cp-cache-heatmap__body">
-        <div class="cp-cache-heatmap__weekdays">
-          <span>一</span>
-          <span></span>
-          <span>三</span>
-          <span></span>
-          <span>五</span>
-          <span></span>
-          <span>日</span>
-        </div>
+        <div class="cp-cache-heatmap__weekdays">${weekdayHtml}</div>
         <div class="cp-cache-heatmap__grid">${cells.join('')}</div>
       </div>
     </div>

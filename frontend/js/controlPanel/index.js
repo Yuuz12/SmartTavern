@@ -14,16 +14,17 @@ import { renderCache } from './cache.js';
 import { renderRegex } from './regex.js';
 
 // ============ Tab 配置 ============
+// title/icon 用于展开面板顶部的功能标题（tab 栏仅显示图标）
 const TABS = [
-  { id: 'api-connection', renderer: renderApiConnection },
-  { id: 'world-info', renderer: renderWorldInfo },
-  { id: 'user-settings', renderer: renderUserSettings },
-  { id: 'extensions', renderer: renderExtensions },
-  { id: 'personas', renderer: renderPersonas },
-  { id: 'characters', renderer: renderCharacters },
-  { id: 'memory', renderer: renderMemory },
-  { id: 'cache', renderer: renderCache },
-  { id: 'regex', renderer: renderRegex },
+  { id: 'api-connection', title: 'API 连接', icon: 'power', renderer: renderApiConnection },
+  { id: 'world-info', title: '世界信息', icon: 'menu_book', renderer: renderWorldInfo },
+  { id: 'user-settings', title: '用户设置', icon: 'manage_accounts', renderer: renderUserSettings },
+  { id: 'extensions', title: '扩展', icon: 'extension', renderer: renderExtensions },
+  { id: 'personas', title: '个性', icon: 'face', renderer: renderPersonas },
+  { id: 'characters', title: '角色', icon: 'person', renderer: renderCharacters },
+  { id: 'memory', title: '记忆', icon: 'psychology', renderer: renderMemory },
+  { id: 'cache', title: '缓存', icon: 'bolt', renderer: renderCache },
+  { id: 'regex', title: '正则', icon: 'find_replace', renderer: renderRegex },
 ];
 
 let activeTab = null;
@@ -71,7 +72,17 @@ function toggleTab(tabId) {
     body.classList.remove('control-panel__body--active');
   });
   const targetBody = document.getElementById(`cp-body-${tabId}`);
-  if (targetBody) targetBody.classList.add('control-panel__body--active');
+  if (targetBody) {
+    targetBody.classList.add('control-panel__body--active');
+    // 面板顶部插入功能标题（tab 栏只显示图标，标题在这里展示）
+    const tabConfig = TABS.find((t) => t.id === tabId);
+    if (tabConfig?.title && !targetBody.querySelector('.control-panel__title')) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'control-panel__title';
+      titleEl.innerHTML = `<mdui-icon name="${tabConfig.icon}"></mdui-icon>${tabConfig.title}`;
+      targetBody.prepend(titleEl);
+    }
+  }
 
   // 渲染内容
   renderTabContent(tabId);

@@ -24,6 +24,48 @@ const THEME_COLOR_PRESETS = [
   { name: '靖蓝', value: '#303F9F' },
 ];
 
+/**
+ * 聊天字体选项
+ * 系统字体直接使用本地字体栈；Web 字体按需懒加载（jsDelivr CDN），
+ * 加载失败时回退到 family 中声明的本地后备字体，不影响可读性
+ */
+const CHAT_FONT_OPTIONS = [
+  {
+    value: 'system',
+    label: '系统默认',
+    family: `system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif`,
+  },
+  {
+    value: 'noto-sans-sc',
+    label: '思源黑体（Noto Sans SC）',
+    family: `'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif`,
+    webfonts: [
+      'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.1.0/index.css',
+      'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.1.0/700.css',
+    ],
+  },
+  {
+    value: 'noto-serif-sc',
+    label: '思源宋体（Noto Serif SC）',
+    family: `'Noto Serif SC', 'Songti SC', SimSun, serif`,
+    webfonts: [
+      'https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.1.0/index.css',
+      'https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.1.0/700.css',
+    ],
+  },
+  {
+    value: 'lxgw-wenkai',
+    label: '霞鹜文楷（LXGW WenKai）',
+    family: `'LXGW WenKai', 'LXGW WenKai SC', 'Kaiti SC', KaiTi, serif`,
+    webfonts: ['https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css'],
+  },
+  {
+    value: 'system-serif',
+    label: '衬线体（系统）',
+    family: `Georgia, 'Times New Roman', 'Songti SC', SimSun, serif`,
+  },
+];
+
 const DEFAULT_QUOTE_PAIRS = [
   { open: '\u201c', close: '\u201d', name: '中文双引号', enabled: true },
   { open: '\u2018', close: '\u2019', name: '中文单引号', enabled: true },
@@ -40,6 +82,7 @@ const DEFAULT_SETTINGS = {
   theme: 'system',
   themeColor: '#6750A4',
   chatWidth: 100,
+  chatFont: 'system',
   messageFontSize: 14,
   showTimestamps: true,
   showAvatars: true,
@@ -110,6 +153,13 @@ export function renderUserSettings(container, opts = {}) {
               +
             </label>
           </div>
+        </div>
+
+        <div class="cp-field">
+          <label class="cp-field__label">聊天字体</label>
+          <mdui-select id="chat-font" variant="outlined" value="${settings.chatFont || 'system'}">
+            ${CHAT_FONT_OPTIONS.map((f) => `<mdui-menu-item value="${f.value}" style="font-family: ${escapeHtml(f.family)};">${f.label}</mdui-menu-item>`).join('')}
+          </mdui-select>
         </div>
 
         <div class="cp-field">
@@ -339,6 +389,12 @@ function bindEvents(container) {
     updateSettings({ themeColor: color });
   });
 
+  // 聊天字体
+  const chatFontSelect = container.querySelector('#chat-font');
+  chatFontSelect?.addEventListener('change', () => {
+    updateSettings({ chatFont: chatFontSelect.value });
+  });
+
   // 聊天宽度
   const chatWidthSlider = container.querySelector('#chat-width');
   const chatWidthHint = container.querySelector('[data-hint="chatWidth"]');
@@ -547,6 +603,19 @@ function bindEvents(container) {
   });
 }
 
+/** 按需注入 Web 字体样式表（同一字体只注入一次） */
+function ensureWebfontsLoaded(fontValue, urls) {
+  urls.forEach((url, i) => {
+    const id = `st-chat-font-${fontValue}-${i}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = url;
+    document.head.appendChild(link);
+  });
+}
+
 /**
  * 应用设置到 DOM（由 updateSettings 调用，也可被外部订阅触发）
  */
@@ -560,6 +629,11 @@ export function applySettings(settings) {
 
   // 消息字体大小
   root.style.setProperty('--st-message-font-size', `${settings.messageFontSize}px`);
+
+  // 聊天字体
+  const fontOpt = CHAT_FONT_OPTIONS.find((f) => f.value === (settings.chatFont || 'system')) || CHAT_FONT_OPTIONS[0];
+  if (fontOpt.webfonts) ensureWebfontsLoaded(fontOpt.value, fontOpt.webfonts);
+  root.style.setProperty('--st-chat-font', fontOpt.family);
 
   // 聊天宽度
   const chatMessages = document.querySelector('.chat-main .chat-messages');

@@ -148,6 +148,8 @@ export interface Worldbook {
   userId: string;
   name: string;
   description?: string;
+  /** 来源角色卡 ID：从角色卡内嵌 character_book 导入时记录，用于随角色卡级联删除与导出 */
+  sourceCharacterId?: string;
   settings: {
     scanDepth: number;
     budgetDefault: number;

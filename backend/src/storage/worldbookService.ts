@@ -60,13 +60,14 @@ export class WorldbookService {
   /**
    * 创建世界书
    */
-  async createWorldbook(userId: string, data: { name: string; description?: string; settings?: Partial<Worldbook['settings']>; entries?: WorldbookEntry[] }): Promise<Worldbook> {
+  async createWorldbook(userId: string, data: { name: string; description?: string; settings?: Partial<Worldbook['settings']>; entries?: WorldbookEntry[]; sourceCharacterId?: string }): Promise<Worldbook> {
     if (!data.name) throw new Error('世界书名称不能为空');
     const storage = this.getStorage(userId);
     return storage.create({
       name: data.name,
       description: data.description || '',
       userId,
+      ...(data.sourceCharacterId ? { sourceCharacterId: data.sourceCharacterId } : {}),
       settings: {
         ...DEFAULT_WORLDBOOK_SETTINGS,
         ...data.settings,
@@ -158,6 +159,18 @@ export class WorldbookService {
     wb.entries.splice(idx, 1);
     await this.update(worldbookId, userId, { entries: wb.entries });
     return true;
+  }
+
+  /**
+   * 删除来源于指定角色卡的内嵌世界书（删除角色卡时级联调用）
+   */
+  async deleteBySourceCharacterId(userId: string, characterId: string): Promise<number> {
+    const storage = this.getStorage(userId);
+    const bound = await storage.query((w) => w.sourceCharacterId === characterId);
+    for (const wb of bound) {
+      await storage.delete(wb.id);
+    }
+    return bound.length;
   }
 
   /**

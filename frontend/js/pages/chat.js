@@ -167,8 +167,8 @@ async function init() {
   // 初始状态
   applySidebarState();
   applyAsideState();
-  // 应用初始用户设置
-  userSettingsModule.applySettings(appState.get('userSettings'));
+  // 应用初始用户设置（getSettings 合并默认值，新用户本地无存储时也能拿到完整默认值）
+  userSettingsModule.applySettings(userSettingsModule.getSettings());
   // 同步 drawer 关闭事件（用户点击遮罩或 ESC 关闭时同步到 appState）
   syncDrawerCloseState();
 }
@@ -344,6 +344,8 @@ function renderMessages() {
       `;
 
       const textarea = bubble.querySelector('.msg-edit-textarea');
+      // 气泡模式下气泡宽度随内容收缩，编辑态需撑满可用宽度避免 textarea 变窄
+      msgEl.classList.add('message--editing');
       textarea.focus();
       // 自动调整高度
       textarea.style.height = 'auto';
@@ -355,6 +357,7 @@ function renderMessages() {
 
       // 取消
       bubble.querySelector('.msg-edit-cancel').addEventListener('click', () => {
+        msgEl.classList.remove('message--editing');
         bubble.innerHTML = originalHtml;
         // 重新应用代码渲染
         const renderSettings = userSettingsModule.getSettings();
