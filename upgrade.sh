@@ -2,9 +2,13 @@
 #
 # SmartTavern 升级脚本
 # 用法: 在 SmartTavern 安装根目录下执行 bash upgrade.sh
+#   可选参数:
+#     -y, --yes     跳过确认提示（自动化场景）
+#     --no-backup   跳过升级前的用户数据备份
 #
 # 功能: 删除所有应用文件（前端、后端源码/构建产物、配置模板、依赖等），
 #       但保留运行时数据与用户配置，使得解压新版发布包即可完成升级。
+#       清理前默认将 backend/data 与 backend/.env 打包备份到当前目录。
 #
 # 保留的内容（不会被删除）:
 #   backend/.env        - 环境变量配置（密钥、端口等）
@@ -28,6 +32,17 @@ ok()    { echo -e "${GREEN}[OK]${NC}   $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
+# ---- 参数解析 ----
+AUTO_YES=0
+NO_BACKUP=0
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes)    AUTO_YES=1 ;;
+        --no-backup) NO_BACKUP=1 ;;
+        *) warn "未知参数: $arg（已忽略）" ;;
+    esac
+done
+
 # 确定安装根目录（脚本所在目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -43,6 +58,12 @@ echo ""
 if [[ ! -d "backend" && ! -d "frontend" ]]; then
     error "当前目录下未找到 backend/ 或 frontend/，请确认在 SmartTavern 安装根目录下执行。"
     exit 1
+fi
+
+# ---- 后端运行检测（删除依赖/产物前应先停服） ----
+if command -v pgrep >/dev/null 2>&1 && pgrep -f "backend/dist" >/dev/null 2>&1; then
+    warn "检测到后端服务可能仍在运行（匹配进程: backend/dist），建议先停止服务再升级，"
+    warn "否则删除文件可能导致运行中的进程异常。"
 fi
 
 # ---- 保留列表（仅做提示，不操作） ----
@@ -64,10 +85,32 @@ done
 echo ""
 
 # ---- 确认 ----
-read -rp "$(echo -e "${YELLOW}确认要删除所有应用文件吗？(y/N): ${NC}")" confirm
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    info "已取消。"
-    exit 0
+if [[ "$AUTO_YES" == "1" ]]; then
+    info "已指定 -y，跳过确认。"
+else
+    read -rp "$(echo -e "${YELLOW}确认要删除所有应用文件吗？(y/N): ${NC}")" confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        info "已取消。"
+        exit 0
+    fi
+fi
+echo ""
+
+# ---- 升级前备份（data + .env，不含体积可能较大的 uploads） ----
+if [[ "$NO_BACKUP" == "1" ]]; then
+    warn "已指定 --no-backup，跳过备份。"
+else
+    BACKUP_TARGETS=()
+    [[ -d "backend/data" ]] && BACKUP_TARGETS+=("backend/data")
+    [[ -f "backend/.env" ]] && BACKUP_TARGETS+=("backend/.env")
+    if [[ ${#BACKUP_TARGETS[@]} -gt 0 ]]; then
+        BACKUP_FILE="st-upgrade-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+        info "备份用户数据到 $BACKUP_FILE ..."
+        tar -czf "$BACKUP_FILE" "${BACKUP_TARGETS[@]}"
+        ok "已备份: $BACKUP_FILE（升级验证无误后可自行删除；不含 uploads/）"
+    else
+        info "未找到 backend/data 或 backend/.env，无需备份。"
+    fi
 fi
 echo ""
 
@@ -104,8 +147,8 @@ if [[ -d "node_modules" ]]; then
     ok "已删除 node_modules/"
 fi
 
-# 根目录文件
-for f in package.json package-lock.json .gitignore INSTALL.md LICENSE README.md; do
+# 根目录文件（publish.ps1 一般不随包分发，若误拷到服务器也一并清理）
+for f in package.json package-lock.json .gitignore INSTALL.md LICENSE README.md publish.ps1; do
     [[ -f "$f" ]] && rm -f "$f" && ok "已删除 $f"
 done
 
@@ -116,8 +159,12 @@ done
 # 旧版升级脚本自身（新版解压会覆盖）
 # 注意：不在这里删除自身，解压时会自动覆盖
 
-# 清理可能残留的临时文件（注意：-o 需用括号分组，否则 -maxdepth 只作用于第一个条件）
-find . -maxdepth 3 \( -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name "*.temp" -o -name "*.cache" -o -name "*.pid" -o -name "*.tsbuildinfo" -o -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" \) 2>/dev/null | while read -r f; do
+# 清理可能残留的临时文件
+# 注意：先用 -prune 排除所有保留目录（data/logs/uploads/backups 及备份包），
+# 避免误删其中的 .log/.tmp 等文件；-o 条件需用括号分组
+find . -maxdepth 3 \
+    \( -path "./backend/data" -o -path "./backend/logs" -o -path "./backend/uploads" -o -path "./backend/backups" \) -prune -o \
+    -type f \( -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name "*.temp" -o -name "*.cache" -o -name "*.pid" -o -name "*.tsbuildinfo" -o -name ".DS_Store" -o -name "Thumbs.db" -o -name "desktop.ini" \) -print 2>/dev/null | while read -r f; do
     rm -f "$f"
 done
 

@@ -44,6 +44,15 @@ $version = $rootPkg.version
 if (-not $version) { $version = "0.0.0" }
 $releaseName = "SmartTavern-v$version"
 
+# 版本一致性检查：根 package.json 与 backend/package.json 版本不一致时提醒（不阻断）
+$backendPkgPath = Join-Path $projectRoot "backend\package.json"
+if (Test-Path $backendPkgPath) {
+    $backendPkg = Get-Content -Raw -LiteralPath $backendPkgPath | ConvertFrom-Json
+    if ($backendPkg.version -and $backendPkg.version -ne $version) {
+        Write-Warning "版本号不一致: 根 package.json = $version, backend/package.json = $($backendPkg.version)，建议同步后再发布"
+    }
+}
+
 $stagingRoot = Join-Path $projectRoot ".release-staging"
 $stagingPath = Join-Path $stagingRoot $releaseName
 $zipPath     = Join-Path (Join-Path $projectRoot $OutputDir) "$releaseName.zip"
@@ -60,6 +69,10 @@ Write-Host "==========================================" -ForegroundColor Cyan
 # 1. 构建后端
 if (-not $SkipBuild) {
     Write-Step "构建后端 (npm run build:backend)"
+    # 依赖预检：避免因未安装依赖导致构建报错不直观
+    if (-not (Test-Path (Join-Path $projectRoot "backend\node_modules"))) {
+        throw "未找到 backend\node_modules，请先执行 npm run install:all 安装依赖"
+    }
     Push-Location $projectRoot
     try {
         & npm run build:backend
