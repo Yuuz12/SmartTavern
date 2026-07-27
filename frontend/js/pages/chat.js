@@ -237,11 +237,11 @@ async function loadWorldbooks() {
 }
 
 // ============ 选中对话 ============
-export async function selectConversation(id) {
+export async function selectConversation(id, opts = {}) {
   try {
     const conv = await conversationApi.get(id);
     appState.set('currentConversation', conv);
-    renderMessages();
+    renderMessages(opts);
     renderAside();
     renderTopBar();
     renderQuickReplies();
@@ -272,9 +272,11 @@ function renderTopBar() {
 }
 
 // ============ 渲染消息 ============
-function renderMessages() {
+function renderMessages(opts = {}) {
   const container = document.getElementById('chat-messages');
   const conv = appState.get('currentConversation');
+  // 编辑保存等场景需保持滚动位置，避免重渲染后跳到最新消息
+  const prevScrollTop = opts.preserveScroll ? container.scrollTop : null;
 
   if (!conv) {
     container.classList.add('chat-messages--empty');
@@ -370,7 +372,7 @@ function renderMessages() {
         try {
           await conversationApi.updateMessage(conv.id, msgId, newContent);
           showSuccess('已保存');
-          await selectConversation(conv.id);
+          await selectConversation(conv.id, { preserveScroll: true });
         } catch (err) {
           showError(err.message || '保存失败');
         }
@@ -562,8 +564,14 @@ function renderMessages() {
   const renderSettings = userSettingsModule.getSettings();
   applyCodeRendering(container, renderSettings);
 
-  // 滚动到底部
-  scrollToBottom();
+  // 滚动到底部（preserveScroll 场景保持原滚动位置，如编辑保存后停留在原消息处）
+  if (opts.preserveScroll) {
+    requestAnimationFrame(() => {
+      container.scrollTop = prevScrollTop;
+    });
+  } else {
+    scrollToBottom();
+  }
 }
 
 function renderMessageHtml(msg, user, character, floorNumber) {
