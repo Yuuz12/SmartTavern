@@ -36,6 +36,18 @@ export function formatTime(timestamp) {
 }
 
 /**
+ * 格式化为完整日期时间：xxxx年x月x日 xx:xx
+ */
+export function formatDateTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${h}:${m}`;
+}
+
+/**
  * 格式化日期
  */
 export function formatDate(timestamp) {

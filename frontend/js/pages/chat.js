@@ -9,7 +9,7 @@ import { showToast, showSuccess, showError, showInfo } from '../components/Toast
 import { showModal, confirm, prompt } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { initMduiTheme } from '../utils/mduiTheme.js';
-import { formatRelativeTime, formatTime, renderMarkdown, escapeHtml, truncate, copyToClipboard, debounce } from '../utils/helpers.js';
+import { formatRelativeTime, formatDateTime, renderMarkdown, escapeHtml, truncate, copyToClipboard, debounce } from '../utils/helpers.js';
 import { applyCodeRendering } from '../utils/codeRenderer.js';
 import { applyRegexScripts } from '../utils/regexEngine.js';
 import storage from '../utils/storage.js';
@@ -592,7 +592,7 @@ function renderMessageHtml(msg, user, character, floorNumber) {
   }
 
   const content = isSystem ? `<em>${escapeHtml(rawContent)}</em>` : renderMarkdown(rawContent);
-  const time = formatTime(msg.timestamp);
+  const time = formatDateTime(msg.timestamp);
 
   // 思维链内容（有 swipes 时从 swipeThinkings 读取对应索引，否则从 metadata 读取）
   const thinking = (msg.swipes && msg.swipeThinkings)
@@ -636,8 +636,8 @@ function renderMessageHtml(msg, user, character, floorNumber) {
     </div>
   `;
 
-  // 楼层 + 生成统计
-  let floorHtml = '';
+  // 楼层 + 生成统计 + 时间（时间并入楼层行，楼层号与时间各自受独立开关控制）
+  let floorInner = '';
   if (floorNumber) {
     let statsText = '';
     if (!isUser && msg.metadata?.duration) {
@@ -646,8 +646,12 @@ function renderMessageHtml(msg, user, character, floorNumber) {
       const tps = msg.metadata.duration > 0 && tokens > 0 ? Math.round(tokens / (msg.metadata.duration / 1000)) : 0;
       statsText = ` · ${sec}s ${tokens}t ${tps}t/s`;
     }
-    floorHtml = `<div class="message__floor">#${floorNumber}${statsText}</div>`;
+    floorInner += `<span class="message__floor-num">#${floorNumber}${statsText}</span>`;
   }
+  if (time) {
+    floorInner += `<span class="message__time">${time}</span>`;
+  }
+  const floorHtml = floorInner ? `<div class="message__floor">${floorInner}</div>` : '';
 
   return `
     <div class="message ${roleClass}" data-msg-id="${msg.id}">
@@ -658,7 +662,6 @@ function renderMessageHtml(msg, user, character, floorNumber) {
           <div class="message__avatar">${avatarContent}</div>
           <div class="${bubbleClass}">${content}</div>
         </div>
-        <div class="message__time">${time}</div>
         ${actions}
       </div>
     </div>
@@ -1246,6 +1249,7 @@ async function sendMessage() {
   const aiMsgHtml = `
     <div class="message message--assistant" id="streaming-message">
       <div class="message__content">
+        <div class="message__floor"><span class="message__time">${formatDateTime(new Date().toISOString())}</span></div>
         <div id="streaming-thinking-container"></div>
         <div class="message__main">
           <div class="message__avatar">${character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI')}</div>
@@ -1253,7 +1257,6 @@ async function sendMessage() {
             <em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>
           </div>
         </div>
-        <div class="message__time">${formatTime(new Date().toISOString())}</div>
       </div>
     </div>
   `;
@@ -1267,10 +1270,10 @@ async function sendMessage() {
   let typingIndicatorRemoved = false;
   let doneReceived = false;
 
-  const safeUpdateBubble = (html) => {
+  const safeUpdateBubble = (html, { blur = true } = {}) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
-      if (userSettingsModule.getSettings().streamBlur !== false) {
+      if (blur && userSettingsModule.getSettings().streamBlur !== false) {
         blurTrailingText(streamingBubble, 18);
       }
     }
@@ -1329,7 +1332,7 @@ async function sendMessage() {
         safeFinishThinking();
         safeRemoveStreamingClass();
         if (!typingIndicatorRemoved) {
-          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
+          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>', { blur: false });
         }
         selectConversation(conv.id);
         document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
@@ -1354,12 +1357,12 @@ async function sendMessage() {
         // AbortError 不显示错误，仅清理 UI
         if (err.name === 'AbortError') {
           if (!fullContent) {
-            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止生成</em>');
+            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止生成</em>', { blur: false });
           }
           return;
         }
         if (!fullContent) {
-          safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`);
+          safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`, { blur: false });
         }
         showError(err.message || '生成失败');
       },
@@ -1371,7 +1374,7 @@ async function sendMessage() {
     // AbortError 不显示错误 toast
     if (err.name !== 'AbortError') {
       if (!fullContent) {
-        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`);
+        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`, { blur: false });
       }
       showError(err.message || '发送失败');
     }
@@ -1442,10 +1445,10 @@ async function regenerateMessage() {
   let typingIndicatorRemoved = false;
   let doneReceived = false;
 
-  const safeUpdateBubble = (html) => {
+  const safeUpdateBubble = (html, { blur = true } = {}) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
-      if (userSettingsModule.getSettings().streamBlur !== false) {
+      if (blur && userSettingsModule.getSettings().streamBlur !== false) {
         blurTrailingText(streamingBubble, 18);
       }
     }
@@ -1503,7 +1506,7 @@ async function regenerateMessage() {
         safeFinishThinking();
         safeRemoveStreamingClass();
         if (!typingIndicatorRemoved) {
-          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
+          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>', { blur: false });
         }
         selectConversation(conv.id);
         document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
@@ -1521,11 +1524,11 @@ async function regenerateMessage() {
         // AbortError 不显示错误，仅清理 UI
         if (err.name === 'AbortError') {
           if (!fullContent) {
-            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止生成</em>');
+            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止生成</em>', { blur: false });
           }
           return;
         }
-        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`);
+        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">生成失败: ${escapeHtml(err.message)}</em>`, { blur: false });
         showError(err.message || '生成失败');
       },
     }, currentAbortController.signal, getRegexExtraBody());
@@ -1587,10 +1590,10 @@ async function continueLastMessage(conv, lastAssistantMsg) {
   let typingIndicatorRemoved = false;
   let doneReceived = false;
 
-  const safeUpdateBubble = (html) => {
+  const safeUpdateBubble = (html, { blur = true } = {}) => {
     if (streamingBubble && document.body.contains(streamingBubble)) {
       streamingBubble.innerHTML = html;
-      if (userSettingsModule.getSettings().streamBlur !== false) {
+      if (blur && userSettingsModule.getSettings().streamBlur !== false) {
         blurTrailingText(streamingBubble, 18);
       }
     }
@@ -1649,7 +1652,7 @@ async function continueLastMessage(conv, lastAssistantMsg) {
         safeFinishThinking();
         safeRemoveStreamingClass();
         if (!typingIndicatorRemoved) {
-          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>');
+          safeUpdateBubble(renderMarkdown(fullContent) || '<em>(空回复)</em>', { blur: false });
         }
         selectConversation(conv.id);
         document.dispatchEvent(new CustomEvent('chat:stream-done', { detail: { conversationId: conv.id } }));
@@ -1666,11 +1669,11 @@ async function continueLastMessage(conv, lastAssistantMsg) {
         safeRemoveStreamingClass();
         if (err.name === 'AbortError') {
           if (!fullContent) {
-            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止续写</em>');
+            safeUpdateBubble('<em style="color: rgb(var(--mdui-color-on-surface-variant));">已停止续写</em>', { blur: false });
           }
           return;
         }
-        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">续写失败: ${escapeHtml(err.message)}</em>`);
+        safeUpdateBubble(`<em style="color: rgb(var(--mdui-color-error));">续写失败: ${escapeHtml(err.message)}</em>`, { blur: false });
         showError(err.message || '续写失败');
       },
     }, currentAbortController.signal, { ...getRegexExtraBody(), continueSuffix: userSettingsModule.getSettings().continueSuffix || 'newline' });

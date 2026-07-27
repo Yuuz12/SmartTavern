@@ -394,6 +394,37 @@ button {
   justify-content: center;
   color: rgb(var(--mdui-color-primary, 103 80 164));
 }
+/* 可折叠区块（mdui-collapse）：采样参数 / 思维链设置，默认折叠避免移动端误触滑条 */
+.cp-collapse {
+  display: block;
+  background-color: rgb(var(--mdui-color-surface-container-low, 247 242 250));
+  border: 1px solid rgb(var(--mdui-color-outline-variant, 202 196 208));
+  border-radius: var(--mdui-shape-corner-large, 16px);
+  overflow: hidden;
+}
+.cp-section__title.cp-collapse__header {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  padding: 16px;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+.cp-collapse__ripple {
+  border-radius: inherit;
+}
+.cp-collapse__arrow {
+  margin-left: auto;
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  transition: transform var(--mdui-motion-duration-short4, 200ms) var(--mdui-motion-easing-emphasized, cubic-bezier(0.2, 0, 0, 1));
+}
+.cp-collapse__arrow--open {
+  transform: rotate(180deg);
+}
+.cp-collapse__body {
+  padding: 0 16px 16px;
+}
 .cp-grid {
   display: grid;
   gap: 12px;
@@ -1501,7 +1532,6 @@ body.st-hide-avatars .message--user .message__main {
 .message__time {
   font-size: 11px;
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
-  padding: 0 4px;
 }
 .message__actions {
   display: flex;
@@ -1541,16 +1571,19 @@ body.st-hide-avatars .message--user .message__main {
   user-select: none;
 }
 
-/* 楼层数 */
+/* 楼层行：楼层号/统计 + 时间同行；楼层号与时间各自受独立开关控制 */
 .message__floor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 16px;
   font-size: 11px;
-  height: 16px;
   line-height: 16px;
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
   padding: 0 4px;
   opacity: 0.7;
 }
-body.st-hide-floor-numbers .message__floor {
+body.st-hide-floor-numbers .message__floor-num {
   display: none;
 }
 
@@ -2463,6 +2496,21 @@ body.st-dialog-quote-bold .st-dialog-quote {
   justify-content: flex-end;
   /* 保存/取消按钮属于 UI 文字，不跟随气泡上的聊天字体，恢复页面默认字体栈 */
   font-family: 'Roboto', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+}
+
+/* 角色对话列表项：窄设备下按钮组换行到 description 下方，避免挤压描述宽度。
+   mdui-list-item 的 part="container"（含 .preset flex 行）改为纵向排列，
+   end-icon（按钮 slot）落到 body 下方并右对齐；外部 ::part 样式覆盖组件内部规则 */
+@media (max-width: 600px) {
+  .char-conv-item::part(container) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .char-conv-item::part(end-icon) {
+    margin-left: 0;
+    margin-top: 2px;
+    justify-content: flex-end;
+  }
 }
 
 /* ============ 正则脚本面板 ============ */

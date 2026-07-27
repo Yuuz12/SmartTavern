@@ -481,10 +481,15 @@ export function renderResponseConfig(container, opts = {}) {
     </div>
 
     <div class="cp-section">
-      <h3 class="cp-section__title">
-        <span class="cp-section__title-icon">${getIcon('sliders', 18)}</span>
-        采样参数
-      </h3>
+      <mdui-collapse class="cp-collapse" data-collapsed="true">
+        <mdui-collapse-item value="sampling">
+          <div slot="header" class="cp-section__title cp-collapse__header">
+            <span class="cp-section__title-icon">${getIcon('sliders', 18)}</span>
+            采样参数
+            <mdui-icon name="expand_more" class="cp-collapse__arrow"></mdui-icon>
+            <mdui-ripple class="cp-collapse__ripple"></mdui-ripple>
+          </div>
+          <div class="cp-collapse__body">
       <div class="cp-grid">
         <div class="cp-field">
           <label class="cp-field__label">
@@ -574,13 +579,21 @@ export function renderResponseConfig(container, opts = {}) {
         </div>
         <mdui-switch data-setting="stream" ${settings.stream ? 'checked' : ''}></mdui-switch>
       </div>
+          </div>
+        </mdui-collapse-item>
+      </mdui-collapse>
     </div>
 
     <div class="cp-section">
-      <h3 class="cp-section__title">
-        <span class="cp-section__title-icon">${getIcon('settings', 18)}</span>
-        思维链（Reasoning）设置
-      </h3>
+      <mdui-collapse class="cp-collapse" data-collapsed="true">
+        <mdui-collapse-item value="reasoning">
+          <div slot="header" class="cp-section__title cp-collapse__header">
+            <span class="cp-section__title-icon">${getIcon('settings', 18)}</span>
+            思维链（Reasoning）设置
+            <mdui-icon name="expand_more" class="cp-collapse__arrow"></mdui-icon>
+            <mdui-ripple class="cp-collapse__ripple"></mdui-ripple>
+          </div>
+          <div class="cp-collapse__body">
       <div class="cp-switch-row">
         <div>
           <div class="cp-switch-row__label">显示思维链</div>
@@ -602,6 +615,9 @@ export function renderResponseConfig(container, opts = {}) {
           <mdui-text-field variant="outlined" type="number" data-setting="thinkingBudget" value="${settings.thinkingBudget}" min="1024" max="64000" step="1024"></mdui-text-field>
         </div>
       </div>
+          </div>
+        </mdui-collapse-item>
+      </mdui-collapse>
     </div>
 
     <div class="cp-section">
@@ -625,6 +641,52 @@ export function renderResponseConfig(container, opts = {}) {
 
   renderPromptList(container.querySelector('#cp-prompt-list'), prompts);
   bindEvents(container, settings, prompts);
+  setupCollapses(container);
+}
+
+/**
+ * 初始化控制面板内的 mdui-collapse 折叠区块
+ * - mdui-collapse 的 value HTML 属性在通过 innerHTML 创建时存在升级时序问题，
+ *   统一通过 JS 属性设置初始展开/收起状态（data-collapsed="true" 表示默认折叠）
+ * - 同步箭头图标旋转状态
+ */
+function setupCollapses(scope) {
+  scope.querySelectorAll('mdui-collapse[data-collapsed]').forEach((collapse) => {
+    const item = collapse.querySelector('mdui-collapse-item');
+    const collapsed = collapse.dataset.collapsed === 'true';
+    collapse.value = collapsed ? '' : (item?.value || '');
+
+    const arrow = collapse.querySelector('.cp-collapse__arrow');
+    if (arrow && item) {
+      const update = () => arrow.classList.toggle('cp-collapse__arrow--open', collapse.value === item.value);
+      item.addEventListener('open', update);
+      item.addEventListener('close', update);
+      update();
+    }
+
+    // 折叠头水波纹：mdui-ripple 元素需手动接线触发（本构建未内置 ripple 指令）
+    const header = collapse.querySelector('[slot="header"]');
+    if (header) attachRipple(header);
+  });
+}
+
+/**
+ * 为折叠头部的 mdui-ripple 元素接线指针/焦点事件，触发 mdui 原生水波纹与悬停态
+ */
+function attachRipple(headerEl) {
+  const ripple = headerEl.querySelector('mdui-ripple');
+  if (!ripple || headerEl.dataset.rippleBound) return;
+  headerEl.dataset.rippleBound = '1';
+  headerEl.addEventListener('pointerdown', (e) => ripple.startPress(e));
+  headerEl.addEventListener('pointerup', () => ripple.endPress());
+  headerEl.addEventListener('pointercancel', () => ripple.endPress());
+  headerEl.addEventListener('pointerenter', () => ripple.startHover());
+  headerEl.addEventListener('pointerleave', () => {
+    ripple.endHover();
+    ripple.endPress();
+  });
+  headerEl.addEventListener('focus', () => ripple.startFocus());
+  headerEl.addEventListener('blur', () => ripple.endFocus());
 }
 
 function renderPromptList(container, prompts) {
