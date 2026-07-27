@@ -424,10 +424,10 @@ function renderMessages() {
       const existingThinking = contentEl.querySelector('.message__thinking');
       if (existingThinking) existingThinking.style.display = 'none';
 
-      // 插入新的思维链容器（在 bubble 前面）
+      // 插入新的思维链容器（在头像+气泡行 message__main 前面）
       const thinkingContainer = document.createElement('div');
       thinkingContainer.className = 'swipe-thinking-container';
-      contentEl.insertBefore(thinkingContainer, bubble);
+      contentEl.insertBefore(thinkingContainer, msgEl.querySelector('.message__main') || bubble);
 
       bubble.classList.add('message__bubble--streaming');
       bubble.innerHTML = '<em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>';
@@ -651,11 +651,13 @@ function renderMessageHtml(msg, user, character, floorNumber) {
 
   return `
     <div class="message ${roleClass}" data-msg-id="${msg.id}">
-      <div class="message__avatar">${avatarContent}</div>
       <div class="message__content">
         ${floorHtml}
         ${thinkingHtml}
-        <div class="${bubbleClass}">${content}</div>
+        <div class="message__main">
+          <div class="message__avatar">${avatarContent}</div>
+          <div class="${bubbleClass}">${content}</div>
+        </div>
         <div class="message__time">${time}</div>
         ${actions}
       </div>
@@ -1243,11 +1245,13 @@ async function sendMessage() {
 
   const aiMsgHtml = `
     <div class="message message--assistant" id="streaming-message">
-      <div class="message__avatar">${character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI')}</div>
       <div class="message__content">
         <div id="streaming-thinking-container"></div>
-        <div class="message__bubble message__bubble--streaming" id="streaming-bubble">
-          <em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>
+        <div class="message__main">
+          <div class="message__avatar">${character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI')}</div>
+          <div class="message__bubble message__bubble--streaming" id="streaming-bubble">
+            <em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>
+          </div>
         </div>
         <div class="message__time">${formatTime(new Date().toISOString())}</div>
       </div>
@@ -1417,11 +1421,13 @@ async function regenerateMessage() {
 
   const aiMsgHtml = `
     <div class="message message--assistant" id="streaming-message">
-      <div class="message__avatar">${character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI')}</div>
       <div class="message__content">
         <div id="streaming-thinking-container"></div>
-        <div class="message__bubble message__bubble--streaming" id="streaming-bubble">
-          <em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>
+        <div class="message__main">
+          <div class="message__avatar">${character?.avatar ? `<img src="${character.avatar}" alt="" />` : escapeHtml(character?.name?.charAt(0).toUpperCase() || 'AI')}</div>
+          <div class="message__bubble message__bubble--streaming" id="streaming-bubble">
+            <em style="color: rgb(var(--mdui-color-on-surface-variant));">正在思考...</em>
+          </div>
         </div>
       </div>
     </div>
@@ -1569,10 +1575,10 @@ async function continueLastMessage(conv, lastAssistantMsg) {
   streamingBubble.id = 'streaming-bubble';
   streamingBubble.classList.add('message__bubble--streaming');
   streamingBubble.innerHTML = '<em style="color: rgb(var(--mdui-color-on-surface-variant));">正在续写...</em>';
-  // 插入新的思维链容器（位于 bubble 之前）
+  // 插入新的思维链容器（位于头像+气泡行 message__main 之前）
   const thinkingContainer = document.createElement('div');
   thinkingContainer.id = 'streaming-thinking-container';
-  contentEl.insertBefore(thinkingContainer, streamingBubble);
+  contentEl.insertBefore(thinkingContainer, contentEl.querySelector('.message__main') || streamingBubble);
   scrollToBottom();
   const suffixMap = { none: '', space: ' ', newline: '\n', double_newline: '\n\n' };
   const suffix = suffixMap[userSettingsModule.getSettings().continueSuffix || 'newline'] ?? '\n';

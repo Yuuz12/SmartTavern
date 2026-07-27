@@ -1367,6 +1367,12 @@ mdui-icon.cp-cache-stat-card__icon {
   font-size: 14px;
   font-weight: 500;
   overflow: hidden;
+  /* 默认与气泡底部对齐；双向 sticky 让长消息滚动时头像被视口边缘推着
+     在气泡高度范围内滑动（底部 → 顶部），多消息场景始终能看清消息归属 */
+  align-self: flex-end;
+  position: sticky;
+  top: 8px;
+  bottom: 8px;
 }
 .message__avatar img {
   width: 100%;
@@ -1382,9 +1388,53 @@ mdui-icon.cp-cache-stat-card__icon {
 .message--user .message__content {
   align-items: flex-end;
 }
+/* 头像与气泡同行：头像始终与气泡顶部对齐，不受楼层/思维链（高度可变、可折叠）影响 */
+.message__main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+  /* 注意：不能设 max-width: 100%，包含块已被 content 的 48px padding 缩小，
+     负 margin 出血需要越过 100% 上限，否则气泡少 48px 宽度提前换行 */
+}
+.message--user .message__main {
+  flex-direction: row-reverse;
+}
+/* 内容列整体让出头像宽度（36px 头像 + 12px 间距），message__main 反向出血，
+   使楼层/思维链/时间戳/操作按钮仍与气泡列对齐 */
+.message--assistant .message__content,
+.message--system .message__content {
+  padding-left: 48px;
+}
+.message--assistant .message__main,
+.message--system .message__main {
+  margin-left: -48px;
+}
+.message--user .message__content {
+  padding-right: 48px;
+}
+.message--user .message__main {
+  margin-right: -48px;
+}
+/* 隐藏头像时取消让位 */
+body.st-hide-avatars .message--assistant .message__content,
+body.st-hide-avatars .message--system .message__content {
+  padding-left: 0;
+}
+body.st-hide-avatars .message--assistant .message__main,
+body.st-hide-avatars .message--system .message__main {
+  margin-left: 0;
+}
+body.st-hide-avatars .message--user .message__content {
+  padding-right: 0;
+}
+body.st-hide-avatars .message--user .message__main {
+  margin-right: 0;
+}
 .message__bubble {
-  padding: 8px 16px;
-  border-radius: var(--md-sys-shape-corner-large, 16px);
+  padding: 10px 16px;
+  /* MD3 对话气泡：大圆角 + 方向角收小，颜色全部取自 mdui 语义色角色 */
+  border-radius: var(--mdui-shape-corner-extra-large, 28px);
   background-color: rgb(var(--mdui-color-surface-container-high, 236 230 240));
   color: rgb(var(--mdui-color-on-surface, 28 27 31));
   font-size: var(--st-message-font-size, 14px);
@@ -1392,17 +1442,31 @@ mdui-icon.cp-cache-stat-card__icon {
   font-family: var(--st-chat-font, inherit);
   line-height: 1.6;
   word-break: break-word;
+  transition:
+    background-color var(--mdui-motion-duration-short4, 0.2s) var(--mdui-motion-easing-linear, linear),
+    border-radius var(--mdui-motion-duration-short4, 0.2s) var(--mdui-motion-easing-standard, ease);
 }
 .message--user .message__bubble {
-  background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
-  color: rgb(var(--mdui-color-on-surface, 28 27 31));
-  border-bottom-right-radius: 4px;
+  /* 发送方用主题色容器色，随主题色/深浅模式自动适配 */
+  background-color: rgb(var(--mdui-color-primary-container, 234 221 255));
+  color: rgb(var(--mdui-color-on-primary-container, 33 0 93));
+  border-bottom-right-radius: var(--mdui-shape-corner-extra-small, 4px);
 }
 .message--assistant .message__bubble {
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: var(--mdui-shape-corner-extra-small, 4px);
+  /* LLM 消息气泡始终拉满可用宽度：即使内容不足一行，也与上方思维链容器同宽 */
+  flex: 1;
+  min-width: 0;
+}
+/* 带思维链的气泡：与上方思维链卡片组成卡片组，相邻角收小衔接（mdui 分组卡片风格） */
+.message__bubble--has-thinking {
+  border-top-left-radius: var(--mdui-shape-corner-extra-small, 4px);
+  border-top-right-radius: var(--mdui-shape-corner-extra-small, 4px);
 }
 .message--system .message__bubble {
   background-color: rgb(var(--mdui-color-surface-container-highest, 230 224 233));
+  color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
+  border-radius: var(--mdui-shape-corner-large, 16px);
   font-style: italic;
   font-size: 13px;
 }
@@ -1480,6 +1544,8 @@ mdui-icon.cp-cache-stat-card__icon {
 /* 楼层数 */
 .message__floor {
   font-size: 11px;
+  height: 16px;
+  line-height: 16px;
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
   padding: 0 4px;
   opacity: 0.7;
@@ -1501,30 +1567,41 @@ body.st-display-flat .message__avatar {
 body.st-display-flat .message__content {
   width: 100%;
   align-items: stretch;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* 平铺模式头像隐藏：main 不参与布局，气泡直接在内容列中拉伸 */
+body.st-display-flat .message__main {
+  display: contents;
 }
 body.st-display-flat .message__bubble {
-  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  border-radius: var(--mdui-shape-corner-medium, 12px);
   padding: 12px 16px;
+  /* main 为 display:contents 时气泡是纵向 flex 列的子项，
+     必须重置 flex:1（否则作用于纵轴导致气泡高度塌陷） */
+  flex: none;
 }
 body.st-display-flat .message--user .message__bubble {
   background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
   color: rgb(var(--mdui-color-on-surface, 28 27 31));
-  border-bottom-right-radius: var(--md-sys-shape-corner-medium, 12px);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border-bottom-right-radius: var(--mdui-shape-corner-medium, 12px);
+  box-shadow: var(--mdui-elevation-level1, 0 1px 3px 0 rgba(0, 0, 0, 0.1));
 }
 body.st-display-flat .message--assistant .message__bubble {
   background-color: rgb(var(--mdui-color-surface-container-high, 236 230 240));
-  border-bottom-left-radius: var(--md-sys-shape-corner-medium, 12px);
+  border-bottom-left-radius: var(--mdui-shape-corner-medium, 12px);
 }
 body.st-display-flat .message--system .message__bubble {
   background-color: rgb(var(--mdui-color-surface-container-highest, 230 224 233));
 }
 
-/* 思维链（mdui-collapse） */
+/* 思维链（mdui-collapse）：与下方气泡组成卡片组，底部相邻角收小 */
 .message__thinking {
   margin-bottom: 4px;
   background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
-  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  border-radius: var(--mdui-shape-corner-large, 16px);
+  border-bottom-left-radius: var(--mdui-shape-corner-extra-small, 4px);
+  border-bottom-right-radius: var(--mdui-shape-corner-extra-small, 4px);
   overflow: hidden;
 }
 .message__thinking-collapse {
@@ -2352,8 +2429,12 @@ body.st-dialog-quote-bold .st-dialog-quote {
   flex: 1;
   min-width: 0;
 }
-.message--editing .message__bubble {
+.message--editing .message__main {
   align-self: stretch;
+}
+.message--editing .message__bubble {
+  flex: 1;
+  min-width: 0;
 }
 
 .msg-edit-textarea {
