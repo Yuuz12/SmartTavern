@@ -3,12 +3,13 @@
  * 管理全局正则和角色正则（回应预设正则）
  */
 import appState from '../stores/appState.js';
-import { userApi } from '../api/index.js';
+import { userApi, characterApi } from '../api/index.js';
 import { showSuccess, showError } from '../components/Toast.js';
 import { confirm } from '../components/Modal.js';
 import { getIcon } from '../components/Icon.js';
 import { escapeHtml } from '../utils/helpers.js';
 import { applySingleRegex } from '../utils/regexEngine.js';
+import { regexScriptsToSillyTavern } from './responseConfig.js';
 import storage from '../utils/storage.js';
 
 const PRESETS_KEY = 'cp_response_presets';
@@ -16,6 +17,7 @@ const ACTIVE_PRESET_KEY = 'cp_response_active_preset';
 
 let scripts = [];
 let presetScripts = [];
+let characterScripts = [];
 let loaded = false;
 let editingId = null;
 let activeContainer = null;
@@ -60,11 +62,15 @@ export function renderRegex(container, { force } = {}) {
         <h3 class="cp-section__title" style="margin-top:16px;font-size:13px;">预设正则（随预设加载/卸载）</h3>
         <div id="regex-preset-list" class="regex-list"></div>
       </div>
+      <div id="regex-character-section">
+        <h3 class="cp-section__title" style="margin-top:16px;font-size:13px;">角色卡正则（随角色加载/卸载）</h3>
+        <div id="regex-character-list" class="regex-list"></div>
+      </div>
     </div>
   `;
 
-  container.querySelector('#regex-add-global').addEventListener('click', () => addScript('global'));
-  container.querySelector('#regex-add-char').addEventListener('click', () => addScript('character'));
+  container.querySelector('#regex-add-global').addEventListener('click', () => addScript());
+  container.querySelector('#regex-add-char').addEventListener('click', () => addCharacterScript());
   container.querySelector('#regex-add-preset').addEventListener('click', () => addPresetScript());
 
   loadScripts(container);
@@ -78,6 +84,7 @@ async function loadScripts(container) {
     loaded = true;
     renderList(container);
     renderPresetList(container);
+    renderCharacterList(container);
   } catch (err) {
     showError(err.message || '加载正则脚本失败');
   }
@@ -215,6 +222,108 @@ function movePresetScript(id, direction) {
   sorted[targetIdx].order = tempOrder;
   savePresetScripts();
   renderPresetList(getContainer());
+}
+
+/** 渲染角色卡内嵌正则脚本（可编辑，保存回角色卡 extensions.regex_scripts） */
+function renderCharacterList(container) {
+  const section = container.querySelector('#regex-character-section');
+  const listEl = container.querySelector('#regex-character-list');
+  if (!section || !listEl) return;
+
+  const conv = appState.get('currentConversation');
+  const characters = appState.get('characters') || [];
+  const character = conv?.characterId
+    ? characters.find((c) => c.id === conv.characterId)
+    : null;
+
+  if (!character) {
+    listEl.innerHTML = '<div class="cp-empty"><div class="cp-empty__desc">请先打开一个角色对话，角色卡正则随当前角色加载/卸载</div></div>';
+    return;
+  }
+
+  characterScripts = appState.get('characterRegexScripts') || [];
+  if (characterScripts.length === 0) {
+    listEl.innerHTML = `<div class="cp-empty"><div class="cp-empty__desc">角色卡「${escapeHtml(character.name)}」未内嵌正则脚本，点击“新建角色”添加</div></div>`;
+    return;
+  }
+
+  const sorted = [...characterScripts].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  listEl.innerHTML = sorted.map((s) => renderScriptItem(s, '角色卡')).join('');
+
+  // 绑定事件
+  listEl.querySelectorAll('.regex-item__toggle').forEach((el) => {
+    el.addEventListener('change', () => {
+      const id = el.closest('.regex-item').dataset.id;
+      const script = characterScripts.find((s) => s.id === id);
+      if (script) {
+        script.enabled = el.checked;
+        saveCharacterScripts();
+      }
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="regex-edit"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('.regex-item').dataset.id;
+      toggleEditor(id, listEl, characterScripts, saveCharacterScriptsAndRender);
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="regex-delete"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('.regex-item').dataset.id;
+      const ok = await confirm('确定要删除这个角色卡正则脚本吗？', '删除');
+      if (!ok) return;
+      characterScripts = characterScripts.filter((s) => s.id !== id);
+      saveCharacterScripts();
+      renderCharacterList(getContainer());
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="regex-up"]').forEach((btn) => {
+    btn.addEventListener('click', () => moveCharacterScript(btn.closest('.regex-item').dataset.id, -1));
+  });
+
+  listEl.querySelectorAll('[data-action="regex-down"]').forEach((btn) => {
+    btn.addEventListener('click', () => moveCharacterScript(btn.closest('.regex-item').dataset.id, 1));
+  });
+}
+
+/** 保存角色卡正则到角色卡 extensions.regex_scripts（后端持久化）并同步 appState */
+function saveCharacterScripts() {
+  const conv = appState.get('currentConversation');
+  const charId = conv?.characterId;
+  if (!charId) return;
+  const characters = appState.get('characters') || [];
+  const character = characters.find((c) => c.id === charId);
+  if (!character) return;
+
+  // 内部格式 → SillyTavern 格式，写回角色卡
+  const extensions = { ...(character.extensions || {}), regex_scripts: regexScriptsToSillyTavern(characterScripts) };
+  character.extensions = extensions;
+  appState.set('characters', characters);
+  appState.set('characterRegexScripts', characterScripts);
+
+  characterApi.update(charId, { extensions }).catch((err) => {
+    showError(err.message || '保存角色卡正则失败');
+  });
+}
+
+function saveCharacterScriptsAndRender() {
+  saveCharacterScripts();
+  renderCharacterList(getContainer());
+}
+
+function moveCharacterScript(id, direction) {
+  const sorted = [...characterScripts].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const idx = sorted.findIndex((s) => s.id === id);
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= sorted.length) return;
+  const tempOrder = sorted[idx].order ?? idx;
+  sorted[idx].order = sorted[targetIdx].order ?? targetIdx;
+  sorted[targetIdx].order = tempOrder;
+  saveCharacterScripts();
+  renderCharacterList(getContainer());
 }
 
 function renderScriptItem(s, scopeOverride) {
@@ -368,19 +477,9 @@ function bindEditorEvents(editorEl, script, onSave) {
 }
 
 // ============ 操作 ============
-async function addScript(scope) {
+async function addScript() {
   const userId = getUserId();
   if (!userId) return;
-
-  let charScope = 'global';
-  if (scope === 'character') {
-    const conv = appState.get('currentConversation');
-    if (!conv?.characterId) {
-      showError('请先打开一个对话再创建角色正则');
-      return;
-    }
-    charScope = conv.characterId;
-  }
 
   const newScript = {
     id: crypto.randomUUID(),
@@ -390,7 +489,7 @@ async function addScript(scope) {
     trimOut: '',
     enabled: true,
     affects: { display: true, userInput: false, prompt: false },
-    scope: charScope,
+    scope: 'global',
     minDepth: undefined,
     maxDepth: undefined,
     order: scripts.length,
@@ -404,6 +503,46 @@ async function addScript(scope) {
   setTimeout(() => {
     const listEl = getContainer()?.querySelector('#regex-list');
     if (listEl) toggleEditor(newScript.id, listEl);
+  }, 50);
+}
+
+/** 新建角色卡正则：写入当前对话角色卡的 extensions.regex_scripts */
+function addCharacterScript() {
+  const conv = appState.get('currentConversation');
+  const characters = appState.get('characters') || [];
+  const character = conv?.characterId
+    ? characters.find((c) => c.id === conv.characterId)
+    : null;
+  if (!character) {
+    showError('请先打开一个角色对话再创建角色卡正则');
+    return;
+  }
+
+  // 确保与 appState 同步（可能尚未渲染过角色区域）
+  characterScripts = appState.get('characterRegexScripts') || [];
+
+  const newScript = {
+    id: 'regex_char_' + Date.now(),
+    name: '新角色卡正则',
+    findRegex: '',
+    replaceWith: '',
+    trimOut: '',
+    enabled: true,
+    affects: { display: true, userInput: false, prompt: false },
+    scope: character.id,
+    minDepth: undefined,
+    maxDepth: undefined,
+    order: characterScripts.length,
+  };
+
+  characterScripts.push(newScript);
+  saveCharacterScripts();
+  renderCharacterList(getContainer());
+
+  // 自动打开编辑器
+  setTimeout(() => {
+    const listEl = getContainer()?.querySelector('#regex-character-list');
+    if (listEl) toggleEditor(newScript.id, listEl, characterScripts, saveCharacterScriptsAndRender);
   }, 50);
 }
 

@@ -544,51 +544,53 @@ button {
   min-width: 160px;
 }
 .cp-prompt-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: block;
 }
+/* 提示词条目（mdui-list-item）：保留拖拽光标与拖拽中透明度。
+   圆角 + overflow:hidden 加在宿主上：内置 mdui-ripple 与 container 平级且铺满宿主，
+   只有宿主裁剪才能让水波纹也呈现圆角 */
 .cp-prompt-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
-  background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
-  border-radius: var(--md-sys-shape-corner-small, 8px);
   cursor: grab;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mdui-shape-corner-small, 8px);
+}
+/* 条目间距，让圆角清晰可见 */
+.cp-prompt-item:not(:last-child) {
+  margin-bottom: 4px;
+}
+/* mdui 圆角 + 底色（作用于 container part） */
+.cp-prompt-item::part(container) {
+  background-color: rgb(var(--mdui-color-surface-container, 243 237 247));
+  border-radius: var(--mdui-shape-corner-small, 8px);
 }
 .cp-prompt-item--dragging {
   opacity: 0.5;
 }
-/* 第一行：拖拽手柄 + 名称 + 禁用标记 */
-.cp-prompt-item__main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
+/* 拖拽手柄（icon 插槽） */
 .cp-prompt-item__handle {
   cursor: grab;
   color: rgb(var(--mdui-color-on-surface-variant, 73 69 79));
   display: flex;
   flex-shrink: 0;
 }
-/* 第二行：角色标签 + 操作按钮 */
-.cp-prompt-item__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-left: 24px;
+/* 名称（headline 默认插槽） */
+.cp-prompt-item__name {
+  font-size: 13px;
+  color: rgb(var(--mdui-color-on-surface, 28 27 31));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+/* 角色标签（description 插槽） */
 .cp-prompt-item__role {
+  display: inline-block;
   font-size: 10px;
   padding: 1px 6px;
   border-radius: var(--md-sys-shape-corner-full, 9999px);
   background-color: rgb(var(--mdui-color-primary-container, 234 221 255));
   color: rgb(var(--mdui-color-on-primary-container, 33 0 93));
   text-transform: uppercase;
-  flex-shrink: 0;
 }
 .cp-prompt-item__role--user {
   background-color: rgb(var(--mdui-color-tertiary-container, 255 216 228));
@@ -598,23 +600,14 @@ button {
   background-color: rgb(var(--mdui-color-secondary-container, 232 222 248));
   color: rgb(var(--mdui-color-on-secondary-container, 29 25 43));
 }
-.cp-prompt-item__name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  color: rgb(var(--mdui-color-on-surface, 28 27 31));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* 操作按钮（end-icon 插槽） */
 .cp-prompt-item__actions {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
 }
-/* marker 提示词：内容自动提取，用左侧色条 + 不同底色与可编辑提示词区分 */
-.cp-prompt-item--marker {
-  background-color: rgb(var(--mdui-color-surface-container-high, 234 221 247));
+/* marker 提示词：内容自动提取，用左侧色条区分（作用于 mdui-list-item 的 container part） */
+.cp-prompt-item--marker::part(container) {
   border-left: 3px solid rgb(var(--mdui-color-primary, 103 80 164));
 }
 /* "自动提取" 中性标签 */
@@ -624,8 +617,6 @@ button {
 }
 /* Chat History 查看视图（只读对话历史） */
 .cp-chat-history {
-  max-height: 60vh;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2473,6 +2464,9 @@ body.st-dialog-quote-bold .st-dialog-quote {
 .msg-edit-textarea {
   width: 100%;
   min-height: 80px;
+  /* 编辑区整体约 80vh（扣除操作按钮行高度），超出后内部滚动，
+     避免 textarea 被内容撑得高于视口、进而顶到顶部看不见下方内容 */
+  max-height: calc(80vh - 52px);
   padding: 10px 12px;
   border: 1px solid rgb(var(--mdui-color-outline));
   border-radius: 8px;
@@ -2482,6 +2476,7 @@ body.st-dialog-quote-bold .st-dialog-quote {
   font-size: var(--st-message-font-size, 14px);
   line-height: 1.6;
   resize: none;
+  overflow-y: auto;
   outline: none;
   transition: border-color 0.2s;
 }

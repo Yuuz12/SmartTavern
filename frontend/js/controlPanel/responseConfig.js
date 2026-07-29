@@ -191,8 +191,9 @@ function presetToSillyTavern(settings, name, prompts, regexScripts) {
 
 /**
  * 内部 RegexScript[] → SillyTavern regex_scripts 格式
+ * 用于预设导出 / 写回角色卡 extensions.regex_scripts（sillyTavernToRegexScripts 的逆向转换）
  */
-function regexScriptsToSillyTavern(scripts) {
+export function regexScriptsToSillyTavern(scripts) {
   return scripts.map((s) => ({
     scriptName: s.name,
     findRegex: s.findRegex,
@@ -201,7 +202,7 @@ function regexScriptsToSillyTavern(scripts) {
     minimumDepth: s.minDepth ?? -1,
     maximumDepth: s.maxDepth ?? -1,
     disabled: !s.enabled,
-    markdownOnly: false,
+    markdownOnly: !!s.affects.display && !s.affects.prompt,
     promptOnly: s.affects.prompt && !s.affects.display,
     runOnEdit: s.affects.userInput,
     substituteRegex: true,
@@ -212,7 +213,7 @@ function regexScriptsToSillyTavern(scripts) {
  * SillyTavern 预设文件中的 regex_scripts → 内部 RegexScript[]
  * 兼容多种字段位置：顶层 regex_scripts / extensions.regex_scripts / data.extensions.regex_scripts
  */
-function sillyTavernToRegexScripts(data) {
+export function sillyTavernToRegexScripts(data) {
   const raw = data.regex_scripts
     ?? data.extensions?.regex_scripts
     ?? data.data?.extensions?.regex_scripts
@@ -629,7 +630,7 @@ export function renderResponseConfig(container, opts = {}) {
       <p style="font-size: 12px; color: var(--md-sys-color-on-surface-variant); margin-bottom: var(--md-sys-spacing-2);">
         拖拽排序提示词，点击编辑。支持的宏：<code>{{char}}</code>, <code>{{user}}</code>, <code>{{description}}</code>, <code>{{personality}}</code>, <code>{{scenario}}</code>, <code>{{mesExamples}}</code>
       </p>
-      <div class="cp-prompt-list" id="cp-prompt-list"></div>
+      <mdui-list class="cp-prompt-list" id="cp-prompt-list"></mdui-list>
     </div>
 
     <div class="cp-actions">
@@ -699,36 +700,85 @@ function renderPromptList(container, prompts) {
     const isMarker = p.marker || MARKER_PROMPT_IDS.has(p.id);
     const isBuiltin = p.system_prompt || BUILTIN_PROMPT_IDS.has(p.id);
     return `
-    <div class="cp-prompt-item ${isMarker ? 'cp-prompt-item--marker' : ''}" data-id="${p.id}" data-index="${idx}" draggable="true">
-      <div class="cp-prompt-item__main">
-        <span class="cp-prompt-item__handle">${getIcon('drag', 16)}</span>
-        <span class="cp-prompt-item__name">${escapeHtml(p.name)}</span>
-        ${isMarker ? '<span class="cp-badge cp-badge--info"><span class="cp-badge__dot"></span>自动提取</span>' : ''}
-        ${!p.enabled ? '<span class="cp-badge cp-badge--error">禁用</span>' : ''}
+    <mdui-list-item class="cp-prompt-item ${isMarker ? 'cp-prompt-item--marker' : ''}" data-id="${p.id}" data-index="${idx}" draggable="true">
+      <span slot="icon" class="cp-prompt-item__handle">${getIcon('drag', 16)}</span>
+      <span class="cp-prompt-item__name">${escapeHtml(p.name)}</span>
+      ${isMarker ? '<span class="cp-badge cp-badge--info"><span class="cp-badge__dot"></span>自动提取</span>' : ''}
+      ${!p.enabled ? '<span class="cp-badge cp-badge--error">禁用</span>' : ''}
+      <span slot="description" class="cp-prompt-item__role cp-prompt-item__role--${p.role}">${p.role}</span>
+      <div slot="end-icon" class="cp-prompt-item__actions">
+        <mdui-button-icon icon="${p.enabled ? 'check_circle' : 'close'}" data-action="toggle-prompt" label="${p.enabled ? '禁用' : '启用'}"></mdui-button-icon>
+        <mdui-button-icon icon="${isMarker ? 'info' : 'edit'}" data-action="edit-prompt" label="${isMarker ? '查看' : '编辑'}"></mdui-button-icon>
+        ${!isBuiltin ? '<mdui-button-icon icon="delete" data-action="delete-prompt" label="删除" style="color: var(--md-sys-color-error);"></mdui-button-icon>' : ''}
       </div>
-      <div class="cp-prompt-item__meta">
-        <span class="cp-prompt-item__role cp-prompt-item__role--${p.role}">${p.role}</span>
-        <div class="cp-prompt-item__actions">
-          <mdui-button-icon icon="${p.enabled ? 'check_circle' : 'close'}" data-action="toggle-prompt" label="${p.enabled ? '禁用' : '启用'}"></mdui-button-icon>
-          <mdui-button-icon icon="${isMarker ? 'info' : 'edit'}" data-action="edit-prompt" label="${isMarker ? '查看' : '编辑'}"></mdui-button-icon>
-          ${!isBuiltin ? '<mdui-button-icon icon="delete" data-action="delete-prompt" label="删除" style="color: var(--md-sys-color-error);"></mdui-button-icon>' : ''}
-        </div>
-      </div>
-    </div>
+    </mdui-list-item>
   `;
   }).join('');
 
   // 拖拽排序
   let dragSrc = null;
+
+  // 拖拽接近列表边缘时自动滚动：滚动容器取最近的 overflow-y: auto/scroll 祖先。
+  // 回应配置实际渲染在侧边栏 .sidebar-content__list 内（而非 .control-panel__body），故需通用检测。
+  let autoScrollRAF = null;
+  let lastDragY = null;
+  let activeScrollBox = null;
+  const EDGE = 48; // 触发自动滚动的边缘阈值（px）
+  const MAX_SPEED = 14; // 每帧最大滚动距离（px）
+  const findScrollBox = (el) => {
+    let node = el.parentElement;
+    while (node && node !== document.documentElement) {
+      const { overflowY } = getComputedStyle(node);
+      if (overflowY === 'auto' || overflowY === 'scroll') return node;
+      node = node.parentElement;
+    }
+    return null;
+  };
+  const onDragTrack = (e) => {
+    lastDragY = e.clientY;
+  };
+  const stopAutoScroll = () => {
+    if (autoScrollRAF != null) cancelAnimationFrame(autoScrollRAF);
+    autoScrollRAF = null;
+    lastDragY = null;
+    if (activeScrollBox) {
+      activeScrollBox.removeEventListener('dragover', onDragTrack);
+      activeScrollBox = null;
+    }
+  };
+  const autoScrollStep = () => {
+    autoScrollRAF = null;
+    if (lastDragY != null && activeScrollBox) {
+      const rect = activeScrollBox.getBoundingClientRect();
+      let delta = 0;
+      if (lastDragY < rect.top + EDGE) {
+        // 靠近顶部：向上滚动，越接近边缘越快
+        delta = -Math.max(1, Math.round(MAX_SPEED * ((rect.top + EDGE - lastDragY) / EDGE)));
+      } else if (lastDragY > rect.bottom - EDGE) {
+        // 靠近底部：向下滚动
+        delta = Math.max(1, Math.round(MAX_SPEED * ((lastDragY - (rect.bottom - EDGE)) / EDGE)));
+      }
+      if (delta !== 0) activeScrollBox.scrollTop += delta;
+    }
+    autoScrollRAF = requestAnimationFrame(autoScrollStep);
+  };
+
   container.querySelectorAll('.cp-prompt-item').forEach((item) => {
     item.addEventListener('dragstart', (e) => {
       dragSrc = item;
       item.classList.add('cp-prompt-item--dragging');
       e.dataTransfer.effectAllowed = 'move';
+      // 开始拖拽时才检测滚动容器并挂载指针跟踪，确保布局已稳定
+      activeScrollBox = findScrollBox(item);
+      if (activeScrollBox) {
+        activeScrollBox.addEventListener('dragover', onDragTrack);
+        if (autoScrollRAF == null) autoScrollRAF = requestAnimationFrame(autoScrollStep);
+      }
     });
     item.addEventListener('dragend', () => {
       item.classList.remove('cp-prompt-item--dragging');
       dragSrc = null;
+      stopAutoScroll();
     });
     item.addEventListener('dragover', (e) => {
       e.preventDefault();

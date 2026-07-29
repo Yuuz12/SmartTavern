@@ -1,6 +1,6 @@
 {
   "name": "smarttavern-backend",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "SmartTavern 后端服务",
   "main": "dist/server.js",
   "type": "module",

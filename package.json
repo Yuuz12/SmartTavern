@@ -1,6 +1,6 @@
 {
   "name": "smarttavern",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "SmartTavern - 基于 LLM 的智能体角色扮演平台",
   "private": true,
   "scripts": {

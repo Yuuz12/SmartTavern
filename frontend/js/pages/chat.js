@@ -14,7 +14,7 @@ import { applyCodeRendering } from '../utils/codeRenderer.js';
 import { applyRegexScripts } from '../utils/regexEngine.js';
 import storage from '../utils/storage.js';
 import controlPanel from '../controlPanel/index.js';
-import { renderResponseConfig, getCurrentPrompts, applyActivePresetRegex } from '../controlPanel/responseConfig.js';
+import { renderResponseConfig, getCurrentPrompts, applyActivePresetRegex, sillyTavernToRegexScripts } from '../controlPanel/responseConfig.js';
 import * as userSettingsModule from '../controlPanel/userSettings.js';
 import { getActivePersona } from '../controlPanel/personas.js';
 
@@ -23,6 +23,8 @@ let currentAbortController = null;
 let isGenerating = false;
 let isMemoryGenerating = false;
 let convSearchKeyword = '';
+// 是否跟随滚动到底部：用户在底部时跟随新内容；往上滚浏览时暂停跟随；滚回底部后恢复
+let followBottom = true;
 
 /** 流式输出逐字模糊：将容器内最后 N 个字符按梯度模糊（越靠后模糊度越高） */
 function blurTrailingText(container, charCount) {
@@ -58,19 +60,41 @@ function blurTrailingText(container, charCount) {
   lastNode.parentNode.insertBefore(frag, lastNode.nextSibling);
 }
 
-/** 获取有效正则脚本：用户自定义 + 当前激活预设自带的正则 */
+/** 获取有效正则脚本：用户自定义 + 当前激活预设自带的正则 + 当前角色卡内嵌正则 */
 function getEffectiveRegexScripts() {
   const userScripts = appState.get('regexScripts') || [];
   const presetScripts = appState.get('presetRegexScripts') || [];
-  if (presetScripts.length === 0) return userScripts;
-  if (userScripts.length === 0) return presetScripts;
-  return [...userScripts, ...presetScripts];
+  const charScripts = appState.get('characterRegexScripts') || [];
+  return [...userScripts, ...presetScripts, ...charScripts];
 }
 
-/** 获取传递给后端的预设正则（用于 prompt 目标） */
+/** 获取传递给后端的预设/角色卡正则（用于 prompt 目标） */
 function getRegexExtraBody() {
   const presetScripts = appState.get('presetRegexScripts') || [];
-  return presetScripts.length > 0 ? { presetRegexScripts: presetScripts } : undefined;
+  const charScripts = appState.get('characterRegexScripts') || [];
+  const extra = {};
+  if (presetScripts.length > 0) extra.presetRegexScripts = presetScripts;
+  if (charScripts.length > 0) extra.characterRegexScripts = charScripts;
+  return Object.keys(extra).length > 0 ? extra : undefined;
+}
+
+/**
+ * 加载/卸载当前对话角色卡内嵌的正则脚本（镜像预设正则机制）：
+ * 打开某角色对话时加载其 extensions.regex_scripts，切换走时卸载为空。
+ */
+function applyActiveCharacterRegex() {
+  const conv = appState.get('currentConversation');
+  const characters = appState.get('characters') || [];
+  const character = conv?.characterId
+    ? characters.find((c) => c.id === conv.characterId)
+    : null;
+  let charScripts = [];
+  if (character) {
+    const imported = sillyTavernToRegexScripts(character) || [];
+    charScripts = imported.map((s) => ({ ...s, scope: character.id }));
+  }
+  appState.set('characterRegexScripts', charScripts);
+  document.dispatchEvent(new CustomEvent('regex-scripts-updated'));
 }
 
 // ============ 初始化 ============
@@ -114,6 +138,9 @@ async function init() {
 
   // 加载当前激活预设的正则脚本
   applyActivePresetRegex();
+
+  // 加载当前对话角色卡内嵌的正则脚本
+  applyActiveCharacterRegex();
 
   // 监听 iframe 渲染器发来的消息（填入输入框 / 发送 / 触发生成）
   window.addEventListener('message', (e) => {
@@ -241,6 +268,8 @@ export async function selectConversation(id, opts = {}) {
   try {
     const conv = await conversationApi.get(id);
     appState.set('currentConversation', conv);
+    // 随对话切换加载/卸载角色卡内嵌正则
+    applyActiveCharacterRegex();
     renderMessages(opts);
     renderAside();
     renderTopBar();
@@ -349,13 +378,11 @@ function renderMessages(opts = {}) {
       // 气泡模式下气泡宽度随内容收缩，编辑态需撑满可用宽度避免 textarea 变窄
       msgEl.classList.add('message--editing');
       textarea.focus();
-      // 自动调整高度
+      // 按初始内容撑开高度（CSS max-height 限制上限约 80vh）。
+      // 输入过程中不再随内容增高，避免 textarea 生长顶动页面滚动；
+      // 超出高度后由 overflow-y 在 textarea 内部滚动。
       textarea.style.height = 'auto';
       textarea.style.height = textarea.scrollHeight + 'px';
-      textarea.addEventListener('input', () => {
-        textarea.style.height = 'auto';
-        textarea.style.height = textarea.scrollHeight + 'px';
-      });
 
       // 取消
       bubble.querySelector('.msg-edit-cancel').addEventListener('click', () => {
@@ -570,7 +597,7 @@ function renderMessages(opts = {}) {
       container.scrollTop = prevScrollTop;
     });
   } else {
-    scrollToBottom();
+    scrollToBottom(true);
   }
 }
 
@@ -716,10 +743,23 @@ function syncThinkingCollapseValue(scope) {
   });
 }
 
-function scrollToBottom() {
+/** 滚动位置是否处于最底部（允许 threshold 像素容差） */
+function isAtBottom(container, threshold = 50) {
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+}
+
+/**
+ * 滚动到消息列表底部。受用户设置 autoScrollToBottom 控制，开启时为“智能跟随”：
+ * 仅当用户处于最底部时才跟随滚动；用户往上滚浏览时暂停跟随，
+ * 待其自己滚回底部后才恢复跟随。
+ * @param {boolean} force 强制滚动并重置为跟随状态（用于加载对话、发送消息等场景）
+ */
+function scrollToBottom(force = false) {
   // 受用户设置 autoScrollToBottom 控制
   const userSettings = appState.get('userSettings') || {};
   if (userSettings.autoScrollToBottom === false) return;
+  if (!force && !followBottom) return;
+  followBottom = true;
   const container = document.getElementById('chat-messages');
   requestAnimationFrame(() => {
     container.scrollTop = container.scrollHeight;
@@ -1250,7 +1290,7 @@ async function sendMessage() {
   }
 
   messagesContainer.insertAdjacentHTML('beforeend', renderMessageHtml(userMsg, user, character));
-  scrollToBottom();
+  scrollToBottom(true);
 
   setGenerating(true);
 
@@ -1934,6 +1974,11 @@ function setupUserMenu() {
 
 // ============ 绑定事件 ============
 function bindEvents() {
+  // 消息列表滚动：记录是否处于最底部，供智能跟随使用（用户往上滚则暂停跟随，滚回底部恢复）
+  document.getElementById('chat-messages')?.addEventListener('scroll', (e) => {
+    followBottom = isAtBottom(e.target);
+  });
+
   // 切换侧边栏（开/关，桌面+移动端通用）
   document.getElementById('toggle-sidebar')?.addEventListener('click', () => {
     appState.set('sidebarCollapsed', !appState.get('sidebarCollapsed'));

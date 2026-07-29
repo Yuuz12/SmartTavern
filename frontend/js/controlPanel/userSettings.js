@@ -239,7 +239,7 @@ export function renderUserSettings(container, opts = {}) {
       <div class="cp-switch-row">
         <div>
           <div class="cp-switch-row__label">自动滚动到底部</div>
-          <div class="cp-switch-row__desc">AI 生成时自动滚动到最新消息</div>
+          <div class="cp-switch-row__desc">位于底部时自动跟随最新消息；往上滚动浏览时暂停跟随，滚回底部后恢复</div>
         </div>
         <mdui-switch id="auto-scroll" ${settings.autoScrollToBottom ? 'checked' : ''}></mdui-switch>
       </div>

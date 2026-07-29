@@ -761,11 +761,12 @@ async function streamLLMResponse(
   const controller = new AbortController();
   req.on('close', () => controller.abort());
 
-  // 正则脚本：对发送给 LLM 的提示词应用 affects.prompt 的正则替换（用户正则 + 预设正则）
+  // 正则脚本：对发送给 LLM 的提示词应用 affects.prompt 的正则替换（用户正则 + 预设正则 + 角色卡内嵌正则）
   const userData = await userService.get(conv.userId);
   const userRegex = userData?.regexScripts || [];
   const presetRegex = (req.body?.presetRegexScripts as import('../../shared/index.js').RegexScript[]) || [];
-  const regexScripts = [...userRegex, ...presetRegex];
+  const characterRegex = (req.body?.characterRegexScripts as import('../../shared/index.js').RegexScript[]) || [];
+  const regexScripts = [...userRegex, ...presetRegex, ...characterRegex];
   if (regexScripts.length > 0) {
     const totalMsgs = messages.length;
     messages = messages.map((m, idx) => {
