@@ -700,7 +700,7 @@ function renderPromptList(container, prompts) {
     const isMarker = p.marker || MARKER_PROMPT_IDS.has(p.id);
     const isBuiltin = p.system_prompt || BUILTIN_PROMPT_IDS.has(p.id);
     return `
-    <mdui-list-item class="cp-prompt-item ${isMarker ? 'cp-prompt-item--marker' : ''}" data-id="${p.id}" data-index="${idx}" draggable="true">
+    <mdui-list-item class="cp-prompt-item ${isMarker ? 'cp-prompt-item--marker' : ''}" data-id="${p.id}" data-index="${idx}">
       <span slot="icon" class="cp-prompt-item__handle">${getIcon('drag', 16)}</span>
       <span class="cp-prompt-item__name">${escapeHtml(p.name)}</span>
       ${isMarker ? '<span class="cp-badge cp-badge--info"><span class="cp-badge__dot"></span>自动提取</span>' : ''}
@@ -764,6 +764,13 @@ function renderPromptList(container, prompts) {
   };
 
   container.querySelectorAll('.cp-prompt-item').forEach((item) => {
+    // 仅从 handle 按下时才启用拖拽
+    const handle = item.querySelector('.cp-prompt-item__handle');
+    if (handle) {
+      handle.addEventListener('mousedown', () => {
+        item.setAttribute('draggable', 'true');
+      });
+    }
     item.addEventListener('dragstart', (e) => {
       dragSrc = item;
       item.classList.add('cp-prompt-item--dragging');
@@ -777,6 +784,7 @@ function renderPromptList(container, prompts) {
     });
     item.addEventListener('dragend', () => {
       item.classList.remove('cp-prompt-item--dragging');
+      item.removeAttribute('draggable');
       dragSrc = null;
       stopAutoScroll();
     });

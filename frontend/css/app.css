@@ -659,8 +659,17 @@ button {
 .cp-actions {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant, 202 196 208));
   flex-wrap: wrap;
+  align-items: center;
+}
+.cp-actions > mdui-button[variant="filled"] {
+  flex: 1 1 100%;
+}
+.cp-actions > mdui-button[variant="outlined"] {
+  flex: 0 1 auto;
 }
 .cp-empty {
   padding: 24px;

@@ -192,7 +192,7 @@ export function renderUserSettings(container, opts = {}) {
       <div class="cp-switch-row">
         <div>
           <div class="cp-switch-row__label">显示时间戳</div>
-          <div class="cp-switch-row__desc">在每条消息下方显示发送时间</div>
+          <div class="cp-switch-row__desc">在每条消息上方显示发送时间</div>
         </div>
         <mdui-switch id="show-timestamps" ${settings.showTimestamps ? 'checked' : ''}></mdui-switch>
       </div>
@@ -206,7 +206,7 @@ export function renderUserSettings(container, opts = {}) {
       <div class="cp-switch-row">
         <div>
           <div class="cp-switch-row__label">显示楼层数</div>
-          <div class="cp-switch-row__desc">在每条消息旁显示楼层编号</div>
+          <div class="cp-switch-row__desc">在每条消息上方显示楼层编号</div>
         </div>
         <mdui-switch id="show-floor-numbers" ${settings.showFloorNumbers ? 'checked' : ''}></mdui-switch>
       </div>
